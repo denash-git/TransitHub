@@ -195,18 +195,18 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     generated["FAKE_SITE_TEMPLATE"] = pick_fake_site_template(generated.get("FAKE_SITE_TEMPLATE", ""))
     generated.setdefault("INIT_TIMESTAMP", "")
     generated["LAST_RECONFIGURE_TIMESTAMP"] = utc_timestamp()
-    fill_if_empty(generated, "PANEL_PORT", str(random_port()))
+    ensure_unique_port(generated, "PANEL_PORT")
     fill_if_empty(generated, "PANEL_PATH", random_token(16))
-    fill_if_empty(generated, "SUB_PORT", str(random_port()))
+    ensure_unique_port(generated, "SUB_PORT")
     fill_if_empty(generated, "SUB_PATH", random_path_token("sub"))
     fill_if_empty(generated, "JSON_PATH", random_path_token("json"))
     fill_if_empty(generated, "WEB_PATH", random_path_token("web"))
     fill_if_empty(generated, "SUBCONVERTER_PATH", random_path_token("conv"))
-    fill_if_empty(generated, "WS_PORT", str(random_port()))
+    ensure_unique_port(generated, "WS_PORT")
     fill_if_empty(generated, "WS_PATH", random_path_token("ws"))
-    fill_if_empty(generated, "XHTTP_PORT", str(random_port()))
+    ensure_unique_port(generated, "XHTTP_PORT")
     fill_if_empty(generated, "XHTTP_PATH", random_path_token("xhttp"))
-    fill_if_empty(generated, "TROJAN_PORT", str(random_port()))
+    ensure_unique_port(generated, "TROJAN_PORT")
     fill_if_empty(generated, "TROJAN_PATH", random_path_token("trojan"))
     fill_if_empty(generated, "CONFIG_USERNAME", random_username(10))
     fill_if_empty(generated, "CONFIG_PASSWORD", random_token(20))
@@ -229,6 +229,23 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
 def fill_if_empty(values: dict[str, str], key: str, value: str) -> None:
     if not values.get(key):
         values[key] = value
+
+
+def ensure_unique_port(values: dict[str, str], key: str) -> None:
+    current = values.get(key, "").strip()
+    if current:
+        return
+
+    reserved = {
+        int(value)
+        for field, value in values.items()
+        if field.endswith("_PORT") and field != key and str(value).strip().isdigit()
+    }
+
+    candidate = random_port()
+    while candidate in reserved:
+        candidate = random_port()
+    values[key] = str(candidate)
 
 
 def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:

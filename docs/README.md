@@ -12,7 +12,6 @@ This repository is a one-shot installer project for `3x-ui`. The intended instal
 - `xui/`
 - `subconverter/`
 - `web/`
-- `state/`
 - `docs/`
 - `temp/`
 
@@ -54,7 +53,7 @@ Each Docker component has its own root-level directory. Config and data are not 
 - `web/fake_site/`
   Rendered fake site.
 - `state/last_status.json`
-  Last installer status snapshot.
+  Optional status snapshot, created only when the status command is used.
 
 ## Current behavior
 
@@ -76,7 +75,7 @@ Each Docker component has its own root-level directory. Config and data are not 
 
 Expected clean-host flow:
 
-1. On a fresh Debian VPS, log in as `root` or use a sudo-capable user.
+1. On a fresh Debian 12 or Debian 13 VPS, log in as `root` or use a sudo-capable user.
 2. Install Git if it is missing:
 
 ```bash

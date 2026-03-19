@@ -190,6 +190,7 @@ def status() -> dict[str, object]:
             str(path) for path in paths.SERVICE_NGINX_CONFIG_DIR.glob("*.conf")
         ),
     }
+    paths.STATUS_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
     paths.STATUS_FILE_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result
 

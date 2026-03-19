@@ -134,6 +134,7 @@ def sync_users_and_settings(cur: sqlite3.Cursor, values: dict[str, str]) -> None
     upsert_setting(cur, "timeLocation", values["TZ"])
     upsert_setting(cur, "webPort", values["PANEL_PORT"])
     upsert_setting(cur, "webBasePath", panel_base_path(values))
+    upsert_setting(cur, "sessionMaxAge", "30")
     upsert_setting(cur, "subShowInfo", "true")
     upsert_setting(cur, "subEnable", "true")
     upsert_setting(cur, "subJsonEnable", "true")

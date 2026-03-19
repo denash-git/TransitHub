@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  if command -v sudo >/dev/null 2>&1; then
+    exec sudo -E bash "$0" "$@"
+  fi
+  printf 'This installer must run as root. Re-run with sudo.\n' >&2
+  exit 1
+fi
+
 YELLOW=$'\033[1;33m'
+GREEN=$'\033[1;32m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
 PROMPT_COUNT=0
@@ -17,16 +26,17 @@ spacer() {
 frame() {
   local title="$1"
   local subtitle="$2"
-  local top='┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓'
-  local mid='┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫'
-  local bottom='┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛'
+  local top=$'\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513'
+  local mid=$'\u2523\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u252b'
+  local bottom=$'\u2517\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u251b'
+  local side=$'\u2503'
 
   printf '\033c'
   spacer 3
   printf '%b\n' "${YELLOW}${top}${RESET}"
-  printf '┃ %-60s ┃\n' "$title"
-  printf '%b\n' "${YELLOW}${mid}${RESET}"
-  printf '┃ %-60s ┃\n' "$subtitle"
+  printf '%s %-60s %s\n' "$side" "$title" "$side"
+  printf '%b\n' "${GREEN}${mid}${RESET}"
+  printf '%s %-60s %s\n' "$side" "$subtitle" "$side"
   printf '%b\n' "${YELLOW}${bottom}${RESET}"
   spacer 3
 }
@@ -49,7 +59,7 @@ prompt_default() {
   fi
 
   if [[ -n "$note" ]]; then
-    printf '\n%bNotice:%b %s\n' "$BOLD" "$RESET" "$note" > /dev/tty
+    printf '\n%bNotice:%b %s\n\n' "$BOLD" "$RESET" "$note" > /dev/tty
   fi
 
   PROMPT_COUNT=$((PROMPT_COUNT + 1))
@@ -75,9 +85,9 @@ main() {
 
   frame '3XUI V1 Install Menu' 'Fresh host deployment for 3x-ui'
   instance_name="$(hostname -s)"
-  domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value shown in brackets, just press Enter.')"
+  domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
-  tz="$(prompt_default 'Timezone, Enter = keep VPS default' "$(detect_tz)")"
+  tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"
 
   spacer 3

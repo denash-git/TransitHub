@@ -34,6 +34,10 @@ UFW_RULES = [
 ]
 
 
+def log(message: str) -> None:
+    print(f"  - {message}")
+
+
 def run(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
@@ -50,14 +54,18 @@ def command_works(command: list[str]) -> bool:
 
 
 def ensure_ufw_rules() -> None:
+    log("Set ufw defaults")
     subprocess.run(["ufw", "default", "deny", "incoming"], check=True)
     subprocess.run(["ufw", "default", "allow", "outgoing"], check=True)
+    log("Open required firewall ports: 22, 80, 443")
     for rule in UFW_RULES:
         subprocess.run(rule, check=True)
+    log("Enable ufw")
     subprocess.run(["ufw", "--force", "enable"], check=True)
 
 
 def ensure_docker_service() -> None:
+    log("Enable and start docker service")
     subprocess.run(["systemctl", "enable", "--now", "docker"], check=True)
 
 
@@ -73,6 +81,7 @@ def docker_compose_available() -> bool:
 def install_compose_support() -> bool:
     failures: list[tuple[str, str, str]] = []
     for package in APT_COMPOSE_PACKAGES:
+        log(f"Try install Compose package: {package}")
         completed = subprocess.run(
             ["apt-get", "install", "-y", package],
             check=False,
@@ -92,10 +101,15 @@ def install_compose_support() -> bool:
 
 
 def prepare_host() -> dict[str, object]:
+    log("Refresh apt package lists")
     run(["apt-get", "update"])
+
+    log("Install base host packages")
     run(["apt-get", "install", "-y", *APT_BASE_PACKAGES])
+
     docker_installed = command_exists("docker")
     if not docker_installed:
+        log("Install Docker Engine from Debian packages")
         run(["apt-get", "install", "-y", *APT_DOCKER_PACKAGES])
         docker_installed = command_exists("docker")
 
@@ -103,6 +117,7 @@ def prepare_host() -> dict[str, object]:
     if docker_installed:
         compose_installed = docker_compose_available()
         if not compose_installed:
+            log("Install Docker Compose support")
             compose_installed = install_compose_support()
         ensure_docker_service()
 
@@ -110,7 +125,7 @@ def prepare_host() -> dict[str, object]:
 
     result = {
         "python3": command_exists("python3"),
-        "python3_venv": command_exists("python3"),
+        "python3_venv": command_works(["python3", "-Im", "ensurepip", "--version"]),
         "certbot": command_exists("certbot"),
         "ufw": command_exists("ufw"),
         "ufw_80": ufw_allows("80/tcp"),

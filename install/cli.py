@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import os
+from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -41,6 +42,11 @@ PRUNE_RUNTIME_DIRS = [
     PROJECT_ROOT / "xui" / "backup",
     PROJECT_ROOT / "xui" / "logs",
 ]
+TOTAL_STEPS = 10
+
+
+class InstallerError(RuntimeError):
+    pass
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,23 +57,48 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    try:
+        return run_install()
+    except InstallerError as exc:
+        print()
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except TimeoutError as exc:
+        print()
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as exc:
+        print()
+        print(f"ERROR: Command failed: {format_command(exc.cmd)}", file=sys.stderr)
+        return 1
+
+
+def run_install() -> int:
     args = build_parser().parse_args()
     overrides = parse_key_value(args.set)
 
     banner("3XUI V1 Installer", "Clean host deploy with local service directories")
+
+    step(1, "Run preflight checks")
+    preflight(overrides)
+
+    step(2, "Prepare Python virtual environment")
     ensure_venv()
     python = venv_python()
 
-    step(1, "Prepare Python environment")
-    run([str(python), "-m", "pip", "install", "--upgrade", "pip"])
-    run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
+    step(3, "Install Python packages")
+    note("Upgrade pip in project virtual environment")
+    run([str(python), "-m", "pip", "install", "--upgrade", "pip"], stream_output=True)
+    note("Install installer Python dependencies")
+    run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)], stream_output=True)
 
-    step(2, "Create project layout")
+    step(4, "Create project layout")
     run([str(python), "-m", "install", "ensure-layout"])
-    step(3, "Prepare host dependencies and firewall")
-    run([str(python), "-m", "install", "prepare-host"])
 
-    step(4, "Initialize instance settings")
+    step(5, "Prepare host dependencies and firewall")
+    run([str(python), "-m", "install", "prepare-host"], stream_output=True)
+
+    step(6, "Initialize instance settings")
     init_command = [str(python), "-m", "install", "init"]
     if args.non_interactive:
         init_command.append("--non-interactive")
@@ -76,24 +107,150 @@ def main() -> int:
     run(init_command)
     values = load_instance_env(str(python))
 
-    step(5, "Issue or reuse TLS certificate")
+    step(7, "Issue or reuse TLS certificate")
+    note(f"Resolve main domain {values['DOMAIN']}")
+    resolve_domain_or_raise(values["DOMAIN"])
     issue_certificate(str(python), values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
 
-    step(6, "Start core containers")
+    step(8, "Start core containers")
     cleanup_previous_stack()
+    note("Create or reuse external Docker network proxy-net")
     ensure_proxy_network()
-    run(compose_command("up", "-d", "xui", "conv"))
+    note("Start xui and conv containers")
+    run(compose_command("up", "-d", "xui", "conv"), stream_output=True)
+    note("Wait for xui service startup")
+    wait_for_service_ready("xui")
+    wait_for_service_ready("conv")
     wait_for_xui_db()
 
-    step(7, "Seed panel settings and inbounds")
+    step(9, "Seed panel settings and inbounds")
     run([str(python), "-m", "install", "seed-xui-db"])
 
-    step(8, "Start full stack")
-    run(compose_command("up", "-d", "--force-recreate", "--remove-orphans"))
+    step(10, "Start full stack and finalize deployment")
+    note("Start all runtime services")
+    run(compose_command("up", "-d", "--force-recreate", "--remove-orphans"), stream_output=True)
+    note("Wait for nginx, xui, and conv services")
+    wait_for_service_ready("nginx")
+    wait_for_service_ready("xui")
+    wait_for_service_ready("conv")
+    note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
-    prune_deployed_tree(values)
+    prune_deployed_tree()
     print_summary(values)
     return 0
+
+
+def preflight(overrides: dict[str, str]) -> None:
+    if os.name == "nt":
+        return
+    require_root()
+    validate_supported_os()
+    require_command("apt-get", "apt-get is not available. This installer supports Debian 12+ only.")
+    validate_apt_access()
+    validate_port_available(80)
+    validate_port_available(443)
+    validate_proxy_network_state()
+    domain = overrides.get("DOMAIN", "").strip()
+    if domain and domain != "example.com":
+        resolve_domain_or_raise(domain)
+
+
+def require_root() -> None:
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        raise InstallerError("This installer must run as root. Run `sudo bash install.sh` or use the root user.")
+
+
+def validate_supported_os() -> None:
+    os_release = parse_os_release()
+    distro_id = os_release.get("ID", "")
+    version = os_release.get("VERSION_ID", "").strip('"')
+    if distro_id != "debian":
+        raise InstallerError("Unsupported OS. This installer currently targets Debian 12 and Debian 13.")
+    try:
+        major_version = int(version.split(".", 1)[0])
+    except ValueError as exc:
+        raise InstallerError(f"Could not determine Debian version from VERSION_ID={version!r}.") from exc
+    if major_version < 12:
+        raise InstallerError(f"Unsupported Debian version: {version}. Supported versions are Debian 12 and 13.")
+
+
+def parse_os_release() -> dict[str, str]:
+    path = Path("/etc/os-release")
+    if not path.exists():
+        raise InstallerError("/etc/os-release is missing. Cannot validate operating system.")
+    result: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        result[key] = value.strip()
+    return result
+
+
+def require_command(command: str, error_message: str) -> None:
+    if shutil.which(command) is None:
+        raise InstallerError(error_message)
+
+
+def validate_apt_access() -> None:
+    completed = subprocess.run(
+        ["apt-get", "--version"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise InstallerError("apt-get is present but not working correctly on this host.")
+
+
+def validate_port_available(port: int) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("0.0.0.0", port))
+        except OSError as exc:
+            raise InstallerError(f"Required host port {port} is already in use. Free port {port} and retry.") from exc
+
+
+def validate_proxy_network_state() -> None:
+    if shutil.which("docker") is None:
+        return
+    version = subprocess.run(
+        ["docker", "version", "--format", "{{.Server.Version}}"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if version.returncode != 0:
+        return
+
+    inspect = subprocess.run(
+        ["docker", "network", "inspect", "proxy-net", "--format", "{{json .}}"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if inspect.returncode != 0:
+        return
+    details = json.loads(inspect.stdout)
+    driver = details.get("Driver", "")
+    internal = details.get("Internal", False)
+    if driver != "bridge" or internal:
+        raise InstallerError(
+            "Docker network `proxy-net` already exists but is not a usable external bridge network."
+        )
+
+
+def resolve_domain_or_raise(domain: str) -> None:
+    try:
+        socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise InstallerError(
+            f"Main domain `{domain}` does not resolve yet. Point its DNS record to this VPS before installation."
+        ) from exc
 
 
 def ensure_venv() -> None:
@@ -168,7 +325,8 @@ def install_python_venv_support() -> None:
         ["python3-venv"],
     ]
 
-    run(["apt-get", "update"])
+    note("Refresh apt package lists for Python venv support")
+    run(["apt-get", "update"], stream_output=True)
     failures: list[tuple[list[str], str, str]] = []
     for packages in attempts:
         completed = subprocess.run(
@@ -188,12 +346,16 @@ def install_python_venv_support() -> None:
             print(stdout)
         if stderr:
             print(f"[apt install failed: {label}]\n{stderr}", file=sys.stderr)
-    raise RuntimeError("Unable to install Python venv support automatically.")
+    raise InstallerError("Unable to install Python venv support automatically.")
 
 
 def load_instance_env(python: str) -> dict[str, str]:
     completed = subprocess.run(
-        [python, "-c", "from install.runtime import load_instance_env; import json; print(json.dumps(load_instance_env()))"],
+        [
+            python,
+            "-c",
+            "from install.runtime import load_instance_env; import json; print(json.dumps(load_instance_env()))",
+        ],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
@@ -212,6 +374,7 @@ def issue_certificate(python: str, domain: str, email: str) -> None:
                 f"ensure_certificate({domain!r}, {email!r})"
             ),
         ],
+        stream_output=True,
     )
 
 
@@ -240,7 +403,8 @@ def cleanup_previous_stack() -> None:
     )
     container_ids = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
     if container_ids:
-        run(["docker", "rm", "-f", *container_ids])
+        note("Remove stale containers from previous installer runs")
+        run(["docker", "rm", "-f", *container_ids], stream_output=True)
 
 
 def ensure_proxy_network() -> None:
@@ -254,7 +418,62 @@ def ensure_proxy_network() -> None:
     )
     if completed.returncode == 0:
         return
-    run(["docker", "network", "create", network_name])
+    run(["docker", "network", "create", network_name], stream_output=True)
+
+
+def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:
+    values = load_instance_env(str(venv_python()))
+    project_name = values.get("INSTANCE_NAME", "").strip() or "xui-v1"
+    deadline = time.time() + timeout_seconds
+
+    while time.time() < deadline:
+        container_id = compose_service_container_id(project_name, service)
+        if not container_id:
+            time.sleep(2)
+            continue
+
+        state = inspect_container_state(container_id)
+        status = state.get("Status")
+        health = (state.get("Health") or {}).get("Status")
+        if health == "healthy":
+            return
+        if health is None and status == "running":
+            return
+        if status == "exited":
+            raise InstallerError(f"Service `{service}` exited during startup.")
+        time.sleep(2)
+
+    raise TimeoutError(f"Service `{service}` did not become ready in time.")
+
+
+def compose_service_container_id(project_name: str, service: str) -> str:
+    completed = subprocess.run(
+        [
+            "docker",
+            "ps",
+            "-aq",
+            "--filter",
+            f"label=com.docker.compose.project={project_name}",
+            "--filter",
+            f"label=com.docker.compose.service={service}",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return next((line.strip() for line in completed.stdout.splitlines() if line.strip()), "")
+
+
+def inspect_container_state(container_id: str) -> dict[str, object]:
+    completed = subprocess.run(
+        ["docker", "inspect", container_id, "--format", "{{json .State}}"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
 
 
 def compose_base_command() -> list[str]:
@@ -274,7 +493,7 @@ def compose_base_command() -> list[str]:
         text=True,
     ).returncode == 0:
         return ["docker-compose"]
-    raise RuntimeError("Docker Compose is not available. Neither 'docker compose' nor 'docker-compose' was found.")
+    raise InstallerError("Docker Compose is not available. Neither `docker compose` nor `docker-compose` was found.")
 
 
 def compose_command(*arguments: str) -> list[str]:
@@ -299,7 +518,7 @@ def parse_key_value(items: list[str]) -> dict[str, str]:
     result: dict[str, str] = {}
     for item in items:
         if "=" not in item:
-            raise ValueError(f"Invalid --set value: {item}")
+            raise InstallerError(f"Invalid --set value: {item}")
         key, value = item.split("=", 1)
         result[key] = value
     return result
@@ -318,7 +537,11 @@ def banner(title: str, subtitle: str) -> None:
 
 def step(number: int, title: str) -> None:
     print()
-    print(f"[{number:02d}/08] {title}")
+    print(f"[{number:02d}/{TOTAL_STEPS:02d}] {title}")
+
+
+def note(message: str) -> None:
+    print(f"  - {message}")
 
 
 def print_summary(values: dict[str, str]) -> None:
@@ -344,7 +567,7 @@ def print_summary(values: dict[str, str]) -> None:
     print()
 
 
-def prune_deployed_tree(values: dict[str, str]) -> None:
+def prune_deployed_tree() -> None:
     if os.name == "nt":
         return
 
@@ -363,26 +586,41 @@ def prune_deployed_tree(values: dict[str, str]) -> None:
             gitkeep_file.unlink()
 
 
-def run(command: list[str], cwd: Path | None = None) -> None:
-    completed = subprocess.run(
-        command,
-        cwd=cwd or PROJECT_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode == 0:
-        return
-    if completed.stdout:
-        print(completed.stdout)
-    if completed.stderr:
-        print(completed.stderr, file=sys.stderr)
-    raise subprocess.CalledProcessError(
-        completed.returncode,
-        command,
-        output=completed.stdout,
-        stderr=completed.stderr,
-    )
+def run(command: list[str], cwd: Path | None = None, stream_output: bool = False) -> None:
+    if stream_output:
+        completed = subprocess.run(
+            command,
+            cwd=cwd or PROJECT_ROOT,
+            check=False,
+            text=True,
+        )
+    else:
+        completed = subprocess.run(
+            command,
+            cwd=cwd or PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            if completed.stdout:
+                print(completed.stdout)
+            if completed.stderr:
+                print(completed.stderr, file=sys.stderr)
+
+    if completed.returncode != 0:
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            command,
+            output=getattr(completed, "stdout", None),
+            stderr=getattr(completed, "stderr", None),
+        )
+
+
+def format_command(command: object) -> str:
+    if isinstance(command, (list, tuple)):
+        return " ".join(str(item) for item in command)
+    return str(command)
 
 
 if __name__ == "__main__":

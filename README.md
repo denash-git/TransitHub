@@ -1,8 +1,8 @@
 # 3XUI V1
 
-## Quick Start On Debian VPS
+## Quick Start On Debian 12/13 VPS
 
-Run on a fresh Debian VPS as `root` or through `sudo`:
+Run on a fresh Debian 12 or Debian 13 VPS as `root` or through `sudo`:
 
 ```bash
 apt-get update
