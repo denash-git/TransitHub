@@ -4,11 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import os
-import subprocess
-import socket
 import secrets
+import socket
 import string
+import subprocess
 import uuid
+
+from .mtproxy import base_secret as generate_mtproxy_secret
+from .mtproxy import client_secret as build_mtproxy_client_secret
 
 
 def utc_timestamp() -> str:
@@ -56,13 +59,18 @@ ENV_FIELDS = [
     EnvField("SUBCONVERTER_IMAGE", "tindy2013/subconverter:latest", True, "Subscription converter image."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
+    EnvField("ENABLE_MTPROXY", "false", True, "Whether to run official Telegram MTProxy TLS transport."),
     EnvField("ENABLE_EXTENSIONS", "true", True, "Whether nginx loads extension includes."),
     EnvField("FAKE_SITE_TEMPLATE", "signal-wire", True, "Selected fake-site template."),
     EnvField("WEB_SUB_TEMPLATE", "clean-card", True, "Selected web subscription template."),
     EnvField("CLASH_TEMPLATE", "default", True, "Selected Clash template."),
+    EnvField("MTPROXY_TLS_DOMAIN", "", True, "Public TLS domain used as MTProxy TLS-transport SNI."),
+    EnvField("MTPROXY_PUBLIC_HOST", "", True, "Hostname or IP used in tg:// MTProxy links."),
+    EnvField("MTPROXY_TAG", "", True, "Optional MTProxyBot advertising tag."),
+    EnvField("MTPROXY_WORKERS", "1", True, "MTProxy worker count; keep 1 for TLS transport."),
     EnvField("CERTBOT_EMAIL", "", True, "Optional Let's Encrypt registration email."),
     EnvField("CERT_LIVE_DIR", "/etc/letsencrypt/live/example.com", True, "Host certificate directory mounted into runtime."),
-    EnvField("BOOTSTRAP_VERSION", "0.1.0", True, "Installer schema version."),
+    EnvField("BOOTSTRAP_VERSION", "0.2.0", True, "Installer schema version."),
     EnvField("XUI_DB_SCHEMA_VERSION", "latest-official", True, "Pinned x-ui schema marker."),
     EnvField("INSTANCE_INITIALIZED", "false", False, "Set to true after first successful init."),
     EnvField("INIT_TIMESTAMP", "", False, "UTC timestamp of initial setup."),
@@ -80,6 +88,10 @@ ENV_FIELDS = [
     EnvField("XHTTP_PATH", "", False, "Randomized XHTTP path."),
     EnvField("TROJAN_PORT", "", False, "Internal Trojan gRPC port."),
     EnvField("TROJAN_PATH", "", False, "Randomized Trojan path."),
+    EnvField("MTPROXY_PORT", "3443", False, "Internal MTProxy client port."),
+    EnvField("MTPROXY_STATS_PORT", "2398", False, "Internal MTProxy stats port."),
+    EnvField("MTPROXY_SECRET", "", False, "Base 16-byte MTProxy secret in hex."),
+    EnvField("MTPROXY_CLIENT_SECRET", "", False, "Client-facing MTProxy secret with transport prefix."),
     EnvField("CONFIG_USERNAME", "", False, "Panel username."),
     EnvField("CONFIG_PASSWORD", "", False, "Panel password."),
     EnvField("REALITY_PRIVATE_KEY", "", False, "REALITY private key placeholder."),
@@ -102,6 +114,7 @@ FAKE_SITE_TEMPLATES = [
 PROMPTED_FIELDS = [
     "DOMAIN",
     "REALITY_DOMAIN",
+    "MTPROXY_TLS_DOMAIN",
     "TZ",
     "WEB_SUB_TEMPLATE",
 ]
@@ -109,6 +122,7 @@ PROMPTED_FIELDS = [
 FIELD_PROMPTS = {
     "DOMAIN": "Main domain",
     "REALITY_DOMAIN": "REALITY domain",
+    "MTPROXY_TLS_DOMAIN": "MTProxy TLS domain",
     "TZ": "Timezone",
     "WEB_SUB_TEMPLATE": "Web subscription template",
 }
@@ -223,6 +237,14 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     fill_if_empty(generated, "CLIENT_UUID_2", str(uuid.uuid4()))
     fill_if_empty(generated, "CLIENT_UUID_3", str(uuid.uuid4()))
     fill_if_empty(generated, "TROJAN_PASSWORD", random_token(28))
+    if generated.get("ENABLE_MTPROXY", "").strip().lower() == "true":
+        fill_if_empty(generated, "MTPROXY_SECRET", generate_mtproxy_secret())
+        generated["MTPROXY_CLIENT_SECRET"] = build_mtproxy_client_secret(
+            generated["MTPROXY_SECRET"],
+            generated.get("MTPROXY_TLS_DOMAIN", ""),
+        )
+    else:
+        generated["MTPROXY_CLIENT_SECRET"] = ""
     return generated
 
 
@@ -253,6 +275,11 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
     domain = synced.get("DOMAIN", "").strip()
     if domain:
         synced["CERT_LIVE_DIR"] = f"/etc/letsencrypt/live/{domain}"
+        if not synced.get("MTPROXY_PUBLIC_HOST", "").strip():
+            synced["MTPROXY_PUBLIC_HOST"] = domain
+    synced["ENABLE_MTPROXY"] = (
+        "true" if synced.get("MTPROXY_TLS_DOMAIN", "").strip() else "false"
+    )
     synced["FAKE_SITE_TEMPLATE"] = pick_fake_site_template(synced.get("FAKE_SITE_TEMPLATE", ""))
     return synced
 

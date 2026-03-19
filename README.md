@@ -1,4 +1,4 @@
-# 3XUI V1
+# 3XUI V2
 
 Быстрая установка `3x-ui` на чистую VPS с Debian 12 или Debian 13.
 
@@ -19,24 +19,16 @@ cd ~/3xui
 bash install.sh
 ```
 
-Если нужен SSH-клон:
-
-```bash
-git clone git@github.com:denash-git/3xui.git ~/3xui
-cd ~/3xui
-bash install.sh
-```
-
 ## Что делает установщик
 
-- спрашивает основной домен, REALITY-домен и timezone
+- спрашивает основной домен, REALITY-домен, опциональный MTProxy TLS domain и timezone
 - ставит системные зависимости
 - поднимает Docker и Compose
 - настраивает `ufw`
 - получает TLS-сертификат через `certbot`
 - генерирует `instance.env`
 - рендерит nginx, клиентскую страницу и fake-site
-- поднимает `xui`, `conv`, `nginx`
+- поднимает `xui`, `conv`, `nginx` и опционально `mtproxy`
 - настраивает панель `3x-ui` и базовые inbound'ы
 - после успешной установки удаляет install-time файлы с VPS
 

@@ -88,20 +88,29 @@ detect_tz() {
 }
 
 main() {
-  local tz domain reality_domain fake_site instance_name
+  local tz domain reality_domain mtproxy_tls_domain fake_site instance_name mtproxy_state
 
-  frame '3XUI V1 Install Menu' 'Fresh host deployment for 3x-ui'
+  frame '3XUI V2 Install Menu' 'Fresh host deployment for 3x-ui'
   instance_name="$(hostname -s)"
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
   printf '\n' > /dev/tty
+  printf '%b%s%b [disabled]: ' "$BOLD" 'MTProxy TLS domain' "$RESET" > /dev/tty
+  IFS= read -r mtproxy_tls_domain < /dev/tty
+  printf '\n' > /dev/tty
   tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"
+  if [[ -n "$mtproxy_tls_domain" ]]; then
+    mtproxy_state="$mtproxy_tls_domain"
+  else
+    mtproxy_state='disabled'
+  fi
 
   spacer 3
   printf '%bStarting install with:%b\n' "$BOLD" "$RESET"
   printf '  domain    : %s\n' "$domain"
   printf '  reality   : %s\n' "$reality_domain"
+  printf '  mtproxy   : %s\n' "$mtproxy_state"
   printf '  timezone  : %s\n' "$tz"
   printf '  fake site : %s\n' "$fake_site"
   spacer 3
@@ -111,6 +120,7 @@ main() {
     --set "INSTANCE_NAME=${instance_name}" \
     --set "DOMAIN=${domain}" \
     --set "REALITY_DOMAIN=${reality_domain}" \
+    --set "MTPROXY_TLS_DOMAIN=${mtproxy_tls_domain}" \
     --set "TZ=${tz}" \
     --set "FAKE_SITE_TEMPLATE=${fake_site}"
 }

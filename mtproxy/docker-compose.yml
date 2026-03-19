@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  mtproxy:
+    image: ${MTPROXY_IMAGE:-3xui-mtproxy:local}
+    build:
+      context: ./mtproxy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MTPROXY_SECRET: ${MTPROXY_SECRET:-}
+      MTPROXY_TLS_DOMAIN: ${MTPROXY_TLS_DOMAIN:-}
+      MTPROXY_TAG: ${MTPROXY_TAG:-}
+      MTPROXY_PORT: ${MTPROXY_PORT:-3443}
+      MTPROXY_STATS_PORT: ${MTPROXY_STATS_PORT:-2398}
+      MTPROXY_WORKERS: ${MTPROXY_WORKERS:-1}
+    volumes:
+      - ./mtproxy/data:/data
+    expose:
+      - "${MTPROXY_PORT:-3443}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${MTPROXY_STATS_PORT:-2398}/stats >/dev/null"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

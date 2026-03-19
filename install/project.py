@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="3XUI instance management")
+    parser = argparse.ArgumentParser(description="3XUI V2 instance management")
     subparsers = parser.add_subparsers(dest="command", required=True)
     init_parser = subparsers.add_parser("init", help="Create or refresh a local instance state.")
     init_parser.add_argument("--non-interactive", action="store_true")
@@ -43,71 +44,75 @@ def parse_key_value(items: list[str]) -> dict[str, str]:
 
 def main() -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
 
-    if args.command == "ensure-layout":
-        from . import paths
-        from .runtime import ensure_layout
+        if args.command == "ensure-layout":
+            from . import paths
+            from .runtime import ensure_layout
 
-        ensure_layout()
-        print(paths.PROJECT_ROOT)
-        return 0
+            ensure_layout()
+            print(paths.PROJECT_ROOT)
+            return 0
 
-    if args.command == "init":
-        from .runtime import init_instance
+        if args.command == "init":
+            from .runtime import init_instance
 
-        print(
-            json.dumps(
-                init_instance(
-                    interactive=not args.non_interactive,
-                    overrides=parse_key_value(args.set),
-                ),
-                indent=2,
+            print(
+                json.dumps(
+                    init_instance(
+                        interactive=not args.non_interactive,
+                        overrides=parse_key_value(args.set),
+                    ),
+                    indent=2,
+                )
             )
-        )
-        return 0
+            return 0
 
-    if args.command == "reconfigure":
-        from .runtime import reconfigure_instance
+        if args.command == "reconfigure":
+            from .runtime import reconfigure_instance
 
-        print(json.dumps(reconfigure_instance(parse_key_value(args.set)), indent=2))
-        return 0
+            print(json.dumps(reconfigure_instance(parse_key_value(args.set)), indent=2))
+            return 0
 
-    if args.command == "status":
-        from .runtime import status
+        if args.command == "status":
+            from .runtime import status
 
-        print(json.dumps(status(), indent=2))
-        return 0
+            print(json.dumps(status(), indent=2))
+            return 0
 
-    if args.command == "prepare-host":
-        from .host import prepare_host
+        if args.command == "prepare-host":
+            from .host import prepare_host
 
-        print(json.dumps(prepare_host(), indent=2))
-        return 0
+            print(json.dumps(prepare_host(), indent=2))
+            return 0
 
-    if args.command == "sync-xui-db":
-        from .runtime import load_instance_env
-        from .xui_db import sync_xui_db
+        if args.command == "sync-xui-db":
+            from .runtime import load_instance_env
+            from .xui_db import sync_xui_db
 
-        values = load_instance_env()
-        print(
-            json.dumps(
-                sync_xui_db(
-                    username=values["CONFIG_USERNAME"],
-                    password=values["CONFIG_PASSWORD"],
-                ),
-                indent=2,
+            values = load_instance_env()
+            print(
+                json.dumps(
+                    sync_xui_db(
+                        username=values["CONFIG_USERNAME"],
+                        password=values["CONFIG_PASSWORD"],
+                    ),
+                    indent=2,
+                )
             )
-        )
-        return 0
+            return 0
 
-    if args.command == "seed-xui-db":
-        from .runtime import load_instance_env
-        from .xui_db import seed_xui_db
+        if args.command == "seed-xui-db":
+            from .runtime import load_instance_env
+            from .xui_db import seed_xui_db
 
-        values = load_instance_env()
-        print(json.dumps(seed_xui_db(values), indent=2))
-        return 0
+            values = load_instance_env()
+            print(json.dumps(seed_xui_db(values), indent=2))
+            return 0
 
-    parser.print_help()
-    return 1
+        parser.print_help()
+        return 1
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1

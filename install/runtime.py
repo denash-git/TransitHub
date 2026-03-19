@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
+from .mtproxy import enabled as mtproxy_enabled
+from .mtproxy import tg_link as mtproxy_tg_link
+from .mtproxy import validate as validate_mtproxy
 from . import paths
 from .env import (
     FIELD_PROMPTS,
@@ -98,6 +101,7 @@ def validate_templates(values: dict[str, str]) -> None:
     missing = [str(path) for path in expected if not path.exists()]
     if missing:
         raise FileNotFoundError("Missing templates:\n" + "\n".join(missing))
+    validate_mtproxy(values)
 
 
 def validate_cert_path(values: dict[str, str]) -> list[str]:
@@ -115,7 +119,7 @@ def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
     prompted = dict(values)
     print()
     print("+----------------------------------------------------+")
-    print("|  3XUI V1 Initial Setup                             |")
+    print("|  3XUI V2 Initial Setup                             |")
     print("+----------------------------------------------------+")
     print()
     for key in PROMPTED_FIELDS:
@@ -123,6 +127,8 @@ def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
         label = FIELD_PROMPTS.get(key, key)
         if key == "TZ":
             entered = input(f"{label} [{current}, Enter = keep default]: ").strip()
+        elif key == "MTPROXY_TLS_DOMAIN":
+            entered = input(f"{label} [{current or 'disabled'}]: ").strip()
         else:
             entered = input(f"{label} [{current}]: ").strip()
         if entered:
@@ -178,6 +184,9 @@ def status() -> dict[str, object]:
         "instance_initialized": values.get("INSTANCE_INITIALIZED", "false"),
         "domain": values.get("DOMAIN", ""),
         "reality_domain": values.get("REALITY_DOMAIN", ""),
+        "mtproxy_enabled": mtproxy_enabled(values),
+        "mtproxy_tls_domain": values.get("MTPROXY_TLS_DOMAIN", ""),
+        "mtproxy_link": mtproxy_tg_link(values),
         "panel_url": panel_url(values),
         "subscription_url": subscription_url(values),
         "web_url": web_url(values),

@@ -10,16 +10,14 @@ import subprocess
 import sys
 import time
 
+from .mtproxy import enabled as mtproxy_enabled
+from .mtproxy import tg_link as mtproxy_tg_link
+from . import paths
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = PROJECT_ROOT / ".venv"
 REQUIREMENTS_PATH = PROJECT_ROOT / "requirements.txt"
 XUI_DB_PATH = PROJECT_ROOT / "xui" / "data" / "x-ui.db"
-COMPOSE_FILES = [
-    PROJECT_ROOT / "nginx" / "docker-compose.yml",
-    PROJECT_ROOT / "xui" / "docker-compose.yml",
-    PROJECT_ROOT / "subconverter" / "docker-compose.yml",
-]
 PRUNE_TOP_LEVEL = [
     VENV_DIR,
     PROJECT_ROOT / "docs",
@@ -49,7 +47,7 @@ class InstallerError(RuntimeError):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="3XUI V1 installer")
+    parser = argparse.ArgumentParser(description="3XUI V2 installer")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--non-interactive", action="store_true")
     return parser
@@ -76,7 +74,7 @@ def run_install() -> int:
     args = build_parser().parse_args()
     overrides = parse_key_value(args.set)
 
-    banner("3XUI V1 Installer", "Clean host deploy with local service directories")
+    banner("3XUI V2 Installer", "Clean host deploy with local service directories")
 
     step(1, "Run preflight checks")
     preflight(overrides)
@@ -105,21 +103,25 @@ def run_install() -> int:
         init_command.extend(["--set", f"{key}={value}"])
     run(init_command)
     values = load_instance_env(str(python))
+    enabled_services = runtime_services(values)
 
     step(7, "Issue or reuse TLS certificate")
     note(f"Resolve main domain {values['DOMAIN']}")
     resolve_domain_or_raise(values["DOMAIN"])
+    resolve_mtproxy_tls_domain(values)
     issue_certificate(str(python), values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
 
     step(8, "Start core containers")
     cleanup_previous_stack()
     note("Create or reuse external Docker network proxy-net")
     ensure_proxy_network()
-    note("Start xui and conv containers")
-    run(compose_command("up", "-d", "xui", "conv"))
+    note(f"Start {', '.join(enabled_services)} containers")
+    run(compose_command(values, "up", "-d", *enabled_services))
     note("Wait for xui service startup")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
+    if mtproxy_enabled(values):
+        wait_for_service_ready("mtproxy")
     wait_for_xui_db()
 
     step(9, "Seed panel settings and inbounds")
@@ -127,11 +129,13 @@ def run_install() -> int:
 
     step(10, "Start full stack and finalize deployment")
     note("Start all runtime services")
-    run(compose_command("up", "-d", "--force-recreate", "--remove-orphans"))
-    note("Wait for nginx, xui, and conv services")
+    run(compose_command(values, "up", "-d", "--force-recreate", "--remove-orphans"))
+    note("Wait for nginx, xui, conv, and optional mtproxy services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
+    if mtproxy_enabled(values):
+        wait_for_service_ready("mtproxy")
     note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
     prune_deployed_tree()
@@ -152,6 +156,9 @@ def preflight(overrides: dict[str, str]) -> None:
     domain = overrides.get("DOMAIN", "").strip()
     if domain and domain != "example.com":
         resolve_domain_or_raise(domain)
+    mtproxy_tls_domain = overrides.get("MTPROXY_TLS_DOMAIN", "").strip()
+    if mtproxy_tls_domain:
+        resolve_domain_or_raise(mtproxy_tls_domain)
 
 
 def require_root() -> None:
@@ -243,13 +250,20 @@ def validate_proxy_network_state() -> None:
         )
 
 
-def resolve_domain_or_raise(domain: str) -> None:
+def resolve_domain_or_raise(domain: str, label: str = "Main domain") -> None:
     try:
         socket.getaddrinfo(domain, 443, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
+        extra = " Point its DNS record to this VPS before installation." if label == "Main domain" else ""
         raise InstallerError(
-            f"Main domain `{domain}` does not resolve yet. Point its DNS record to this VPS before installation."
+            f"{label} `{domain}` does not resolve yet.{extra}"
         ) from exc
+
+
+def resolve_mtproxy_tls_domain(values: dict[str, str]) -> None:
+    if not mtproxy_enabled(values):
+        return
+    resolve_domain_or_raise(values["MTPROXY_TLS_DOMAIN"], "MTProxy TLS domain")
 
 
 def ensure_venv() -> None:
@@ -494,8 +508,25 @@ def compose_base_command() -> list[str]:
     raise InstallerError("Docker Compose is not available. Neither `docker compose` nor `docker-compose` was found.")
 
 
-def compose_command(*arguments: str) -> list[str]:
-    values = load_instance_env(str(venv_python()))
+def compose_files(values: dict[str, str]) -> list[Path]:
+    files = [
+        paths.SERVICE_NGINX_COMPOSE_PATH,
+        paths.SERVICE_XUI_COMPOSE_PATH,
+        paths.SERVICE_SUBCONVERTER_COMPOSE_PATH,
+    ]
+    if mtproxy_enabled(values):
+        files.append(paths.SERVICE_MTPROXY_COMPOSE_PATH)
+    return files
+
+
+def runtime_services(values: dict[str, str]) -> list[str]:
+    services = ["xui", "conv"]
+    if mtproxy_enabled(values):
+        services.append("mtproxy")
+    return services
+
+
+def compose_command(values: dict[str, str], *arguments: str) -> list[str]:
     project_name = values.get("INSTANCE_NAME", "").strip() or "xui-v1"
     command = [
         *compose_base_command(),
@@ -506,7 +537,7 @@ def compose_command(*arguments: str) -> list[str]:
         "--env-file",
         "instance.env",
     ]
-    for compose_file in COMPOSE_FILES:
+    for compose_file in compose_files(values):
         command.extend(["-f", str(compose_file)])
     command.extend(arguments)
     return command
@@ -554,6 +585,9 @@ def print_summary(values: dict[str, str]) -> None:
         f"JSON Sub URL : {json_url}",
         f"Fake site    : {values['FAKE_SITE_TEMPLATE']}",
     ]
+    if mtproxy_enabled(values):
+        lines.append(f"MTProxy URL  : {mtproxy_tg_link(values)}")
+        lines.append(f"MTProxy SNI  : {values['MTPROXY_TLS_DOMAIN']}")
     width = max(len(line) for line in lines) + 2
     print("\n" * 2, end="")
     print("Connection details")

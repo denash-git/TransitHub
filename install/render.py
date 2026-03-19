@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 
+from .mtproxy import enabled as mtproxy_enabled
 from . import paths
 
 
@@ -18,6 +19,20 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
     render_context["EXTENSIONS_INCLUDE_BLOCK"] = (
         "    include /etc/nginx/extensions/*.conf;"
         if context.get("ENABLE_EXTENSIONS", "true").strip().lower() == "true"
+        else ""
+    )
+    render_context["MTPROXY_STREAM_MAP_BLOCK"] = (
+        f"        {context['MTPROXY_TLS_DOMAIN']} mtproxy_backend;"
+        if mtproxy_enabled(context)
+        else ""
+    )
+    render_context["MTPROXY_STREAM_UPSTREAM_BLOCK"] = (
+        (
+            "    upstream mtproxy_backend {\n"
+            f"        server mtproxy:{context.get('MTPROXY_PORT', '3443')};\n"
+            "    }"
+        )
+        if mtproxy_enabled(context)
         else ""
     )
 
