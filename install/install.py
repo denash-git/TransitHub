@@ -21,10 +21,26 @@ COMPOSE_FILES = [
     PROJECT_ROOT / "sub2sing-box" / "docker-compose.yml",
 ]
 PRUNE_TOP_LEVEL = [
+    VENV_DIR,
+    PROJECT_ROOT / "bootstrap",
     PROJECT_ROOT / "docs",
+    PROJECT_ROOT / "install",
     PROJECT_ROOT / "temp",
+    PROJECT_ROOT / "templates",
     PROJECT_ROOT / "README.md",
+    PROJECT_ROOT / "requirements.txt",
+    PROJECT_ROOT / "install.py",
+    PROJECT_ROOT / "install.sh",
+    PROJECT_ROOT / "instance.env.example",
     PROJECT_ROOT / "__pycache__",
+]
+PRUNE_RUNTIME_DIRS = [
+    PROJECT_ROOT / "install" / "host",
+    PROJECT_ROOT / "nginx" / "logs",
+    PROJECT_ROOT / "sub2sing-box" / "config",
+    PROJECT_ROOT / "sub2sing-box" / "logs",
+    PROJECT_ROOT / "xui" / "backup",
+    PROJECT_ROOT / "xui" / "logs",
 ]
 
 
@@ -270,13 +286,16 @@ def parse_key_value(items: list[str]) -> dict[str, str]:
 def banner(title: str, subtitle: str) -> None:
     lines = [title, subtitle]
     width = max(len(line) for line in lines) + 4
+    print("\n" * 2, end="")
     print("+" + "-" * width + "+")
     for line in lines:
         print(f"|  {line.ljust(width - 2)}|")
     print("+" + "-" * width + "+")
+    print()
 
 
 def step(number: int, title: str) -> None:
+    print()
     print(f"[{number:02d}/08] {title}")
 
 
@@ -293,10 +312,14 @@ def print_summary(values: dict[str, str]) -> None:
         f"Fake site    : {values['FAKE_SITE_TEMPLATE']}",
     ]
     width = max(len(line) for line in lines) + 2
+    print("\n" * 2, end="")
+    print("Connection details")
+    print()
     print("+" + "-" * width + "+")
     for line in lines:
         print(f"| {line.ljust(width - 1)}|")
     print("+" + "-" * width + "+")
+    print()
 
 
 def prune_deployed_tree(values: dict[str, str]) -> None:
@@ -309,14 +332,13 @@ def prune_deployed_tree(values: dict[str, str]) -> None:
         elif path.exists():
             path.unlink()
 
-    fake_templates_root = PROJECT_ROOT / "templates" / "fakesite"
-    selected = values["FAKE_SITE_TEMPLATE"]
-    if fake_templates_root.exists():
-        for path in fake_templates_root.iterdir():
-            if path.name == selected:
-                continue
-            if path.is_dir():
-                shutil.rmtree(path, ignore_errors=True)
+    for path in PRUNE_RUNTIME_DIRS:
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+
+    for gitkeep_file in PROJECT_ROOT.rglob(".gitkeep"):
+        if gitkeep_file.is_file():
+            gitkeep_file.unlink()
 
 
 def run(command: list[str], cwd: Path | None = None) -> None:

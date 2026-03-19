@@ -21,6 +21,7 @@ bash install.sh
 ```
 
 The installer prepares host packages itself and configures Docker, Docker Compose, certbot, and `ufw`.
+After a successful Linux deployment, installer sources and documentation are pruned from the VPS, leaving the runtime tree only.
 
 ## Target Flow
 

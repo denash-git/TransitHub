@@ -106,7 +106,7 @@ cd ~/3xui
    - timezone, defaulting to the VPS timezone
 6. The installer picks one fake-site template automatically.
 7. The installer creates `.venv`, installs dependencies, prepares the host, prompts or applies required settings, renders service configs, seeds `x-ui.db`, starts Docker Compose, and removes old layout folders.
-8. On the deployed host, documentation, temp files, and unselected fake-site templates are pruned.
+8. On the deployed host, the bootstrap sources, installer sources, templates, documentation, temp files, and other non-runtime artifacts are pruned so only the runtime tree remains.
 
 Manual flow is still available:
 

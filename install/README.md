@@ -10,8 +10,6 @@ This directory contains the clean-host entrypoint and host-side artifacts.
   Removes old layouts and temporary migration artifacts after a successful run.
 - `host/`
   Generated reports and host integration outputs such as package/firewall preparation status.
-- `logs/`
-  Reserved for installer-side logs if the flow needs persistent host install traces later.
 
 The intended flow on a fresh VPS is:
 
