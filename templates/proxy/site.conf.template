@@ -148,6 +148,5 @@ server {
         grpc_set_header Host $host;
         grpc_set_header X-Forwarded-Host $host;
     }
-
-    include /etc/nginx/extensions/*.conf;
+${EXTENSIONS_INCLUDE_BLOCK}
 }

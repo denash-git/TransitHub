@@ -14,6 +14,12 @@ def render_template(template_path: Path, destination: Path, context: dict[str, s
 
 def render_runtime_files(context: dict[str, str]) -> list[Path]:
     rendered_files: list[Path] = []
+    render_context = dict(context)
+    render_context["EXTENSIONS_INCLUDE_BLOCK"] = (
+        "    include /etc/nginx/extensions/*.conf;"
+        if context.get("ENABLE_EXTENSIONS", "true").strip().lower() == "true"
+        else ""
+    )
 
     nginx_templates = {
         "nginx.conf.template": paths.SERVICE_NGINX_CONFIG_DIR / "nginx.conf",
@@ -21,8 +27,18 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         "site.conf.template": paths.SERVICE_NGINX_CONFIG_DIR / "site.conf",
     }
     for template_name, destination in nginx_templates.items():
-        render_template(paths.TEMPLATES_PROXY_DIR / template_name, destination, context)
+        render_template(paths.TEMPLATES_PROXY_DIR / template_name, destination, render_context)
         rendered_files.append(destination)
+
+    force_dark_theme = context.get("FORCE_DARK_THEME", "true").strip().lower() == "true"
+    if force_dark_theme:
+        dark_theme_dest = paths.SERVICE_NGINX_FORCE_DARK_THEME_PATH
+        render_template(paths.TEMPLATES_PROXY_DIR / "force-dark-theme.conf.template", dark_theme_dest, context)
+        rendered_files.append(dark_theme_dest)
+    else:
+        dark_theme_dest = paths.SERVICE_NGINX_FORCE_DARK_THEME_PATH
+        if dark_theme_dest.exists():
+            dark_theme_dest.unlink()
 
     subpage_src = paths.TEMPLATES_SUBPAGE_DIR / f"{context['WEB_SUB_TEMPLATE']}.html.template"
     subpage_dest = paths.SERVICE_CLIENT_PAGE_DIR / "index.html"

@@ -5,6 +5,8 @@ instance.env
 state/last_status.json
 nginx/config/*.conf
 !nginx/config/.gitkeep
+nginx/extensions/*.conf
+!nginx/extensions/.gitkeep
 web/client_page/index.html
 web/client_page/clash.yaml
 !web/client_page/.gitkeep
