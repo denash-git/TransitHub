@@ -15,8 +15,8 @@ services:
       - ./nginx/config/stream.conf:/etc/nginx/stream.conf:ro
       - ./nginx/config/site.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/extensions:/etc/nginx/extensions:ro
-      - ./web-sub/site:/srv/subpage:ro
-      - ./fake-site/site:/srv/fakesite:ro
+      - ./web/client_page:/srv/subpage:ro
+      - ./web/fake_site:/srv/fakesite:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - stack

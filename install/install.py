@@ -39,6 +39,8 @@ PRUNE_RUNTIME_DIRS = [
     PROJECT_ROOT / "nginx" / "logs",
     PROJECT_ROOT / "sub2sing-box" / "config",
     PROJECT_ROOT / "sub2sing-box" / "logs",
+    PROJECT_ROOT / "fake-site",
+    PROJECT_ROOT / "web-sub",
     PROJECT_ROOT / "xui" / "backup",
     PROJECT_ROOT / "xui" / "logs",
 ]

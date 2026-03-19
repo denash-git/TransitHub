@@ -5,11 +5,11 @@ instance.env
 state/last_status.json
 nginx/config/*.conf
 !nginx/config/.gitkeep
-web-sub/site/index.html
-web-sub/site/clash.yaml
-!web-sub/site/.gitkeep
-fake-site/site/index.html
-!fake-site/site/.gitkeep
+web/client_page/index.html
+web/client_page/clash.yaml
+!web/client_page/.gitkeep
+web/fake_site/index.html
+!web/fake_site/.gitkeep
 xui/data/*
 !xui/data/.gitkeep
 sub2sing-box/data/*

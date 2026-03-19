@@ -25,17 +25,17 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         rendered_files.append(destination)
 
     subpage_src = paths.TEMPLATES_SUBPAGE_DIR / f"{context['WEB_SUB_TEMPLATE']}.html.template"
-    subpage_dest = paths.SERVICE_SUBPAGE_SITE_DIR / "index.html"
+    subpage_dest = paths.SERVICE_CLIENT_PAGE_DIR / "index.html"
     render_template(subpage_src, subpage_dest, context)
     rendered_files.append(subpage_dest)
 
     clash_src = paths.TEMPLATES_CLASH_DIR / f"{context['CLASH_TEMPLATE']}.yaml.template"
-    clash_dest = paths.SERVICE_SUBPAGE_SITE_DIR / "clash.yaml"
+    clash_dest = paths.SERVICE_CLIENT_PAGE_DIR / "clash.yaml"
     render_template(clash_src, clash_dest, context)
     rendered_files.append(clash_dest)
 
     fake_site_src = paths.TEMPLATES_FAKESITE_DIR / context["FAKE_SITE_TEMPLATE"] / "index.html.template"
-    fake_site_dest = paths.SERVICE_FAKESITE_SITE_DIR / "index.html"
+    fake_site_dest = paths.SERVICE_FAKE_SITE_DIR / "index.html"
     render_template(fake_site_src, fake_site_dest, context)
     rendered_files.append(fake_site_dest)
 

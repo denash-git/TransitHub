@@ -34,6 +34,7 @@ The project is structured so that:
 
 - `docker-compose.yml` and `instance.env` live in the project root
 - each Docker component has its own root-level directory
+- web-facing static assets live under `web/`
 - host-side integration and cleanup logic lives in `install/`
 - the user-facing install menu lives in `install.sh`
 

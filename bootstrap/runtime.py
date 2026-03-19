@@ -36,16 +36,18 @@ def migrate_legacy_layout() -> None:
         paths.LEGACY_RUNTIME_PROXY_EXTENSIONS_DIR,
         paths.SERVICE_PROXY_EXTENSIONS_DIR,
     )
-    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_SUBPAGE_DIR, paths.SERVICE_SUBPAGE_SITE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_FAKESITE_DIR, paths.SERVICE_FAKESITE_SITE_DIR)
+    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_SUBPAGE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
+    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_FAKESITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
     copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_XUI_DATA_DIR, paths.SERVICE_XUI_DATA_DIR)
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_PROXY_CONFIG_DIR, paths.SERVICE_PROXY_CONFIG_DIR)
     copy_tree_contents_if_missing(
         paths.LEGACY_DEPLOY_PROXY_EXTENSIONS_DIR,
         paths.SERVICE_PROXY_EXTENSIONS_DIR,
     )
-    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_SUBPAGE_SITE_DIR, paths.SERVICE_SUBPAGE_SITE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_FAKESITE_SITE_DIR, paths.SERVICE_FAKESITE_SITE_DIR)
+    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_SUBPAGE_SITE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
+    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_FAKESITE_SITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
+    copy_tree_contents_if_missing(paths.LEGACY_ROOT_WEB_SUBPAGE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
+    copy_tree_contents_if_missing(paths.LEGACY_ROOT_FAKESITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_XUI_DATA_DIR, paths.SERVICE_XUI_DATA_DIR)
     copy_tree_contents_if_missing(
         paths.LEGACY_DEPLOY_SUB2SINGBOX_DATA_DIR,

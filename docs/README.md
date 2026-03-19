@@ -13,8 +13,7 @@ This repository is a one-shot bootstrap project for `3x-ui`. The intended instal
 - `nginx/`
 - `xui/`
 - `sub2sing-box/`
-- `web-sub/`
-- `fake-site/`
+- `web/`
 - `state/`
 - `docs/`
 - `temp/`
@@ -50,9 +49,9 @@ Each Docker component has its own root-level directory. Config and data are not 
   Converter service data.
 - `sub2sing-box/docker-compose.yml`
   Compose slice for the converter service.
-- `web-sub/site/`
-  Rendered subscription landing page.
-- `fake-site/site/`
+- `web/client_page/`
+  Rendered subscription landing page and generated `clash.yaml`.
+- `web/fake_site/`
   Rendered fake site.
 - `state/last_status.json`
   Last bootstrap status snapshot.
