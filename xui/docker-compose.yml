@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   xui:
     image: ${XUI_IMAGE:-ghcr.io/mhsanaei/3x-ui:latest}

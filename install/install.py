@@ -248,7 +248,9 @@ def compose_base_command() -> list[str]:
 
 
 def compose_command(*arguments: str) -> list[str]:
-    command = [*compose_base_command(), "--env-file", "instance.env"]
+    values = load_instance_env(str(venv_python()))
+    project_name = values.get("INSTANCE_NAME", "").strip() or "xui-v1"
+    command = [*compose_base_command(), "-p", project_name, "--env-file", "instance.env"]
     for compose_file in COMPOSE_FILES:
         command.extend(["-f", str(compose_file)])
     command.extend(arguments)

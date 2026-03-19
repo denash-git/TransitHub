@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   sub2sing-box:
     image: ${SUB2SINGBOX_IMAGE:-tindy2013/subconverter:latest}

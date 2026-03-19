@@ -1,4 +1,4 @@
-name: ${INSTANCE_NAME:-xui-v1}
+version: "3.8"
 
 networks:
   stack:
