@@ -83,13 +83,62 @@ def main() -> int:
 def ensure_venv() -> None:
     if VENV_DIR.exists():
         return
-    run([sys.executable, "-m", "venv", str(VENV_DIR)])
+    command = [sys.executable, "-m", "venv", str(VENV_DIR)]
+    try:
+        run(command)
+    except subprocess.CalledProcessError as exc:
+        if not should_install_venv_support(exc):
+            raise
+        install_python_venv_support()
+        run(command)
 
 
 def venv_python() -> Path:
     if os.name == "nt":
         return VENV_DIR / "Scripts" / "python.exe"
     return VENV_DIR / "bin" / "python"
+
+
+def should_install_venv_support(error: subprocess.CalledProcessError) -> bool:
+    if os.name == "nt" or shutil.which("apt-get") is None:
+        return False
+    output = f"{error.output or ''}\n{error.stderr or ''}"
+    markers = (
+        "ensurepip is not available",
+        "install the python3-venv package",
+        "No module named venv",
+    )
+    return any(marker in output for marker in markers)
+
+
+def install_python_venv_support() -> None:
+    versioned_package = f"python{sys.version_info.major}.{sys.version_info.minor}-venv"
+    attempts = [
+        [versioned_package],
+        ["python3-venv"],
+    ]
+
+    run(["apt-get", "update"])
+    failures: list[tuple[list[str], str, str]] = []
+    for packages in attempts:
+        completed = subprocess.run(
+            ["apt-get", "install", "-y", *packages],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode == 0:
+            return
+        failures.append((packages, completed.stdout, completed.stderr))
+
+    for packages, stdout, stderr in failures:
+        label = " ".join(packages)
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(f"[apt install failed: {label}]\n{stderr}", file=sys.stderr)
+    raise RuntimeError("Unable to install Python venv support automatically.")
 
 
 def load_instance_env(python: str) -> dict[str, str]:
@@ -228,7 +277,12 @@ def run(command: list[str], cwd: Path | None = None) -> None:
         print(completed.stdout)
     if completed.stderr:
         print(completed.stderr, file=sys.stderr)
-    raise subprocess.CalledProcessError(completed.returncode, command)
+    raise subprocess.CalledProcessError(
+        completed.returncode,
+        command,
+        output=completed.stdout,
+        stderr=completed.stderr,
+    )
 
 
 if __name__ == "__main__":
