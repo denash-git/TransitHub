@@ -13,6 +13,18 @@ YELLOW=$'\033[1;33m'
 GREEN=$'\033[1;32m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
+FRAME_WIDTH=60
+
+repeat_char() {
+  local char="$1"
+  local count="$2"
+  local result=""
+  local i
+  for ((i = 0; i < count; i++)); do
+    result+="$char"
+  done
+  printf '%s' "$result"
+}
 
 spacer() {
   local lines="${1:-1}"
@@ -25,17 +37,18 @@ spacer() {
 frame() {
   local title="$1"
   local subtitle="$2"
-  local top=$'\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513'
-  local mid=$'\u2523\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u252b'
-  local bottom=$'\u2517\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u251b'
   local side=$'\u2503'
+  local horiz=$'\u2501'
+  local top=$'\u250f'"$(repeat_char "$horiz" $((FRAME_WIDTH + 2)))"$'\u2513'
+  local mid=$'\u2523'"$(repeat_char "$horiz" $((FRAME_WIDTH + 2)))"$'\u252b'
+  local bottom=$'\u2517'"$(repeat_char "$horiz" $((FRAME_WIDTH + 2)))"$'\u251b'
 
   printf '\033c'
   spacer 3
   printf '%b%s%b\n' "$YELLOW" "$top" "$RESET"
-  printf '%b%s %-60s %s%b\n' "$YELLOW" "$side" "$title" "$side" "$RESET"
+  printf '%b%s %-'${FRAME_WIDTH}'s %s%b\n' "$YELLOW" "$side" "$title" "$side" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$mid" "$RESET"
-  printf '%b%s %-60s %s%b\n' "$GREEN" "$side" "$subtitle" "$side" "$RESET"
+  printf '%b%s %-'${FRAME_WIDTH}'s %s%b\n' "$GREEN" "$side" "$subtitle" "$side" "$RESET"
   printf '%b%s%b\n' "$YELLOW" "$bottom" "$RESET"
   spacer 3
 }
