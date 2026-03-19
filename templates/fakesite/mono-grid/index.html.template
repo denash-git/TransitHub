@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mono Grid</title>
+  <style>
+    body {
+      margin: 0;
+      color: #f0f0f0;
+      background:
+        linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px),
+        #111111;
+      background-size: 24px 24px;
+      font-family: "Courier New", monospace;
+    }
+    .panel {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 72px 24px;
+    }
+    h1 { font-size: clamp(36px, 7vw, 92px); margin: 0 0 20px; }
+    p { color: #c9c9c9; max-width: 580px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <section class="panel">
+    <h1>Mono Grid</h1>
+    <p>Operational layouts for route management, edge relay tuning and subscription delivery across compact private infrastructure.</p>
+  </section>
+</body>
+</html>

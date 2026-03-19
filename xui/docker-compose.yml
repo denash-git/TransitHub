@@ -1,0 +1,28 @@
+services:
+  xui:
+    image: ${XUI_IMAGE:-ghcr.io/mhsanaei/3x-ui:latest}
+    restart: unless-stopped
+    volumes:
+      - ./xui/data:/etc/x-ui
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    environment:
+      TZ: ${TZ:-Europe/Moscow}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        mkdir -p /etc/x-ui
+        /app/x-ui setting \
+          -username "${CONFIG_USERNAME:-admin}" \
+          -password "${CONFIG_PASSWORD:-changeme}" \
+          -port "${PANEL_PORT:-2053}" \
+          -webBasePath "${PANEL_PATH:-panel}" >/dev/null 2>&1 || true
+        exec /app/x-ui
+    expose:
+      - "${PANEL_PORT:-2053}"
+      - "${SUB_PORT:-2080}"
+      - "${WS_PORT:-3001}"
+      - "${XHTTP_PORT:-3003}"
+      - "${TROJAN_PORT:-3002}"
+    networks:
+      - stack

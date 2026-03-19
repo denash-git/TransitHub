@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northstar Cloud</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Verdana, sans-serif;
+      color: #f8fbff;
+      background:
+        radial-gradient(circle at 80% 0%, rgba(85,171,255,0.35), transparent 28%),
+        linear-gradient(180deg, #12233b 0%, #0a111c 100%);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 24px;
+    }
+    h1 { font-size: clamp(40px, 8vw, 90px); margin: 0 0 18px; }
+    p { max-width: 580px; line-height: 1.7; color: rgba(248,251,255,0.78); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Northstar Cloud</h1>
+    <p>Distributed edge hosting with practical observability, private ingress shaping and fast regional rollouts.</p>
+  </div>
+</body>
+</html>

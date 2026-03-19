@@ -1,0 +1,5 @@
+name: ${INSTANCE_NAME:-xui-v1}
+
+networks:
+  stack:
+    driver: bridge

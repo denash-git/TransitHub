@@ -1,0 +1,24 @@
+mixed-port: 7890
+allow-lan: true
+mode: rule
+log-level: info
+
+proxy-providers:
+  ${INSTANCE_NAME}-provider:
+    type: http
+    url: "https://${DOMAIN}/${SUB_PATH}/first"
+    interval: 3600
+    path: ./providers/${INSTANCE_NAME}.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 600
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    use:
+      - ${INSTANCE_NAME}-provider
+
+rules:
+  - MATCH,PROXY

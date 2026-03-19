@@ -1,0 +1,153 @@
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 9443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+    port_in_redirect off;
+
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    root /srv/fakesite;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /${WEB_PATH}/ {
+        alias /srv/subpage/;
+        index index.html;
+    }
+
+    location = /${PANEL_PATH} {
+        return 307 /${PANEL_PATH}/;
+    }
+
+    location /assets/ {
+        proxy_pass http://xui:${PANEL_PORT}/assets/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location = /login {
+        proxy_pass http://xui:${PANEL_PORT}/login;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location = /logout {
+        proxy_pass http://xui:${PANEL_PORT}/logout;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location = /getTwoFactorEnable {
+        proxy_pass http://xui:${PANEL_PORT}/getTwoFactorEnable;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location = /panel {
+        return 307 /${PANEL_PATH}/panel/;
+    }
+
+    location /panel/ {
+        return 307 /${PANEL_PATH}$request_uri;
+    }
+
+    location /xui/ {
+        return 307 /${PANEL_PATH}$request_uri;
+    }
+
+    location = /serverstatus {
+        proxy_pass http://xui:${PANEL_PORT}/serverstatus;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /${PANEL_PATH}/ {
+        proxy_pass http://xui:${PANEL_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_http_version 1.1;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location /${SUB_PATH} {
+        proxy_pass http://xui:${SUB_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /${JSON_PATH} {
+        proxy_pass http://xui:${SUB_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /${WS_PORT}/${WS_PATH} {
+        proxy_pass http://xui:${WS_PORT}/${WS_PORT}/${WS_PATH};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_http_version 1.1;
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+
+    location /${SUB2SINGBOX_PATH}/ {
+        proxy_pass http://sub2sing-box:25500/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /${XHTTP_PATH} {
+        grpc_pass grpc://xui:${XHTTP_PORT};
+        grpc_buffer_size 16k;
+        grpc_socket_keepalive on;
+        grpc_read_timeout 1h;
+        grpc_send_timeout 1h;
+        grpc_set_header Connection "";
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header X-Forwarded-Proto $scheme;
+        grpc_set_header X-Forwarded-Port $server_port;
+        grpc_set_header Host $host;
+        grpc_set_header X-Forwarded-Host $host;
+    }
+
+    location /${TROJAN_PORT}/${TROJAN_PATH} {
+        grpc_pass grpc://xui:${TROJAN_PORT};
+        grpc_buffer_size 16k;
+        grpc_socket_keepalive on;
+        grpc_read_timeout 1d;
+        grpc_send_timeout 1d;
+        grpc_set_header Connection "";
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header X-Forwarded-Proto $scheme;
+        grpc_set_header X-Forwarded-Port $server_port;
+        grpc_set_header Host $host;
+        grpc_set_header X-Forwarded-Host $host;
+    }
+
+    include /etc/nginx/extensions/*.conf;
+}

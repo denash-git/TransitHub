@@ -1,0 +1,10 @@
+services:
+  sub2sing-box:
+    image: ${SUB2SINGBOX_IMAGE:-tindy2013/subconverter:latest}
+    restart: unless-stopped
+    volumes:
+      - ./sub2sing-box/data:/base
+    expose:
+      - "25500"
+    networks:
+      - stack

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${INSTANCE_NAME} Subscription</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffaf0;
+      --ink: #1e1b18;
+      --accent: #c4542b;
+      --muted: #6f655d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(196,84,43,0.15), transparent 32%),
+        linear-gradient(180deg, #f8f2e8 0%, var(--bg) 100%);
+      color: var(--ink);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(720px, 100%);
+      background: rgba(255,250,240,0.9);
+      border: 1px solid rgba(30,27,24,0.08);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 24px 60px rgba(30,27,24,0.12);
+    }
+    h1 { margin-top: 0; font-size: clamp(32px, 6vw, 56px); }
+    p { color: var(--muted); line-height: 1.6; }
+    label { display: block; margin-top: 16px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+    input, textarea {
+      width: 100%;
+      margin-top: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(30,27,24,0.12);
+      padding: 14px 16px;
+      font: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 132px; resize: vertical; }
+    button {
+      margin-top: 16px;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 20px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>${INSTANCE_NAME}</h1>
+    <p>Use a client label to generate the rendered subscription links for this instance.</p>
+    <label for="client">Client name</label>
+    <input id="client" value="first">
+    <label for="output">URLs</label>
+    <textarea id="output" readonly></textarea>
+    <button id="refresh" type="button">Refresh links</button>
+  </main>
+  <script>
+    const clientInput = document.getElementById("client");
+    const output = document.getElementById("output");
+    const refresh = () => {
+      const client = clientInput.value.trim() || "first";
+      const base = "https://${DOMAIN}";
+      output.value = [
+        `${base}/${SUB_PATH}/${client}`,
+        `${base}/${JSON_PATH}/${client}`,
+        `${base}/${SUB2SINGBOX_PATH}/?target=sing-box&name=${client}`,
+        `${base}/${WEB_PATH}/clash.yaml?name=${client}`
+      ].join("\n");
+      const url = new URL(window.location.href);
+      url.searchParams.set("name", client);
+      history.replaceState({}, "", url);
+    };
+    const initial = new URL(window.location.href).searchParams.get("name");
+    if (initial) clientInput.value = initial;
+    document.getElementById("refresh").addEventListener("click", refresh);
+    clientInput.addEventListener("input", refresh);
+    refresh();
+  </script>
+</body>
+</html>

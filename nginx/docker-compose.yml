@@ -1,0 +1,20 @@
+services:
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    restart: unless-stopped
+    depends_on:
+      - xui
+      - sub2sing-box
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/config/stream.conf:/etc/nginx/stream.conf:ro
+      - ./nginx/config/site.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/extensions:/etc/nginx/extensions:ro
+      - ./web-sub/site:/srv/subpage:ro
+      - ./fake-site/site:/srv/fakesite:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - stack
