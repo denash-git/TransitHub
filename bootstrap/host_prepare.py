@@ -24,12 +24,13 @@ APT_DOCKER_PACKAGES = [
 ]
 APT_COMPOSE_PACKAGES = [
     "docker-compose-plugin",
+    "docker-compose",
 ]
 
 UFW_RULES = [
     ["ufw", "allow", "80/tcp"],
     ["ufw", "allow", "443/tcp"],
-    ["ufw", "limit", "22/tcp"],
+    ["ufw", "allow", "22/tcp"],
 ]
 
 
@@ -39,6 +40,13 @@ def run(command: list[str]) -> None:
 
 def command_exists(command: str) -> bool:
     return shutil.which(command) is not None
+
+
+def command_works(command: list[str]) -> bool:
+    try:
+        return subprocess.run(command, capture_output=True, text=True).returncode == 0
+    except OSError:
+        return False
 
 
 def ensure_ufw_rules() -> None:
@@ -58,6 +66,31 @@ def ufw_allows(port: str) -> bool:
     return port in result.stdout
 
 
+def docker_compose_available() -> bool:
+    return command_works(["docker", "compose", "version"]) or command_works(["docker-compose", "version"])
+
+
+def install_compose_support() -> bool:
+    failures: list[tuple[str, str, str]] = []
+    for package in APT_COMPOSE_PACKAGES:
+        completed = subprocess.run(
+            ["apt-get", "install", "-y", package],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode == 0 and docker_compose_available():
+            return True
+        failures.append((package, completed.stdout, completed.stderr))
+
+    for package, stdout, stderr in failures:
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(f"[apt install failed: {package}]\n{stderr}")
+    return docker_compose_available()
+
+
 def prepare_host() -> dict[str, object]:
     run(["apt-get", "update"])
     run(["apt-get", "install", "-y", *APT_BASE_PACKAGES])
@@ -68,18 +101,9 @@ def prepare_host() -> dict[str, object]:
 
     compose_installed = False
     if docker_installed:
-        compose_installed = subprocess.run(
-            ["docker", "compose", "version"],
-            capture_output=True,
-            text=True,
-        ).returncode == 0
+        compose_installed = docker_compose_available()
         if not compose_installed:
-            run(["apt-get", "install", "-y", *APT_COMPOSE_PACKAGES])
-            compose_installed = subprocess.run(
-                ["docker", "compose", "version"],
-                capture_output=True,
-                text=True,
-            ).returncode == 0
+            compose_installed = install_compose_support()
         ensure_docker_service()
 
     ensure_ufw_rules()

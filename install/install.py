@@ -227,8 +227,28 @@ def cleanup_previous_stack() -> None:
         run(["docker", "rm", "-f", *container_ids])
 
 
+def compose_base_command() -> list[str]:
+    if subprocess.run(
+        ["docker", "compose", "version"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    ).returncode == 0:
+        return ["docker", "compose"]
+    if shutil.which("docker-compose") and subprocess.run(
+        ["docker-compose", "version"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    ).returncode == 0:
+        return ["docker-compose"]
+    raise RuntimeError("Docker Compose is not available. Neither 'docker compose' nor 'docker-compose' was found.")
+
+
 def compose_command(*arguments: str) -> list[str]:
-    command = ["docker", "compose", "--env-file", "instance.env"]
+    command = [*compose_base_command(), "--env-file", "instance.env"]
     for compose_file in COMPOSE_FILES:
         command.extend(["-f", str(compose_file)])
     command.extend(arguments)
