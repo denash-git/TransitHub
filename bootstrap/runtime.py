@@ -46,8 +46,6 @@ def migrate_legacy_layout() -> None:
     )
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_SUBPAGE_SITE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_FAKESITE_SITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_ROOT_WEB_SUBPAGE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_ROOT_FAKESITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_XUI_DATA_DIR, paths.SERVICE_XUI_DATA_DIR)
     copy_tree_contents_if_missing(
         paths.LEGACY_DEPLOY_SUB2SINGBOX_DATA_DIR,
