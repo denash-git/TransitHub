@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     depends_on:
       - xui
-      - sub2sing-box
+      - conv
     ports:
       - "80:80"
       - "443:443"
@@ -19,4 +19,9 @@ services:
       - ./web/fake_site:/srv/fakesite:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
-      - stack
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

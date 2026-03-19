@@ -8,7 +8,6 @@ from . import paths
 from .env import (
     FIELD_PROMPTS,
     PROMPTED_FIELDS,
-    defaults,
     ensure_generated,
     interactive_defaults,
     looks_uninitialized,
@@ -48,8 +47,8 @@ def migrate_legacy_layout() -> None:
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_FAKESITE_SITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
     copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_XUI_DATA_DIR, paths.SERVICE_XUI_DATA_DIR)
     copy_tree_contents_if_missing(
-        paths.LEGACY_DEPLOY_SUB2SINGBOX_DATA_DIR,
-        paths.SERVICE_SUB2SINGBOX_DATA_DIR,
+        paths.LEGACY_DEPLOY_SUBCONVERTER_DATA_DIR,
+        paths.SERVICE_SUBCONVERTER_DATA_DIR,
     )
 
 
@@ -117,9 +116,11 @@ def render(values: dict[str, str]) -> list[Path]:
 
 def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
     prompted = dict(values)
-    print("┌──────────────────────────────────────────────────┐")
-    print("│  3XUI V1 Initial Setup                          │")
-    print("└──────────────────────────────────────────────────┘")
+    print()
+    print("+----------------------------------------------------+")
+    print("|  3XUI V1 Initial Setup                             |")
+    print("+----------------------------------------------------+")
+    print()
     for key in PROMPTED_FIELDS:
         current = prompted.get(key, "")
         label = FIELD_PROMPTS.get(key, key)

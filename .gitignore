@@ -12,8 +12,8 @@ web/fake_site/index.html
 !web/fake_site/.gitkeep
 xui/data/*
 !xui/data/.gitkeep
-sub2sing-box/data/*
-!sub2sing-box/data/.gitkeep
+subconverter/data/*
+!subconverter/data/.gitkeep
 install/host/last_prepare.json
 .ssh/
 temp/*

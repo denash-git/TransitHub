@@ -20,7 +20,7 @@ cd ~/3xui
 bash install.sh
 ```
 
-The installer prepares host packages itself and configures Docker, Docker Compose, certbot, and `ufw`.
+The installer prepares host packages itself and configures Docker, Docker Compose, the external Docker network `proxy-net`, certbot, and `ufw`.
 After a successful Linux deployment, installer sources and documentation are pruned from the VPS, leaving the runtime tree only.
 
 ## Target Flow
@@ -32,7 +32,7 @@ bash install.sh
 
 The project is structured so that:
 
-- `docker-compose.yml` and `instance.env` live in the project root
+- `instance.env` lives in the project root
 - each Docker component has its own root-level directory
 - web-facing static assets live under `web/`
 - host-side integration and cleanup logic lives in `install/`

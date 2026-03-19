@@ -16,17 +16,18 @@ spacer() {
 
 frame() {
   local title="$1"
-  local subtitle="${2:-}"
+  local subtitle="$2"
+  local top='┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓'
+  local mid='┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫'
+  local bottom='┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛'
 
   printf '\033c'
   spacer 3
-  printf '%b\n' "${YELLOW}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${RESET}"
-  printf '%b %-60s %b\n' "${YELLOW}┃${RESET}" "$title" "${YELLOW}┃${RESET}"
-  if [[ -n "$subtitle" ]]; then
-    printf '%b\n' "${YELLOW}┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫${RESET}"
-    printf '%b %-60s %b\n' "${YELLOW}┃${RESET}" "$subtitle" "${YELLOW}┃${RESET}"
-  fi
-  printf '%b\n' "${YELLOW}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${RESET}"
+  printf '%b\n' "${YELLOW}${top}${RESET}"
+  printf '┃ %-60s ┃\n' "$title"
+  printf '%b\n' "${YELLOW}${mid}${RESET}"
+  printf '┃ %-60s ┃\n' "$subtitle"
+  printf '%b\n' "${YELLOW}${bottom}${RESET}"
   spacer 3
 }
 
@@ -87,7 +88,7 @@ main() {
   printf '  fake site : %s\n' "$fake_site"
   spacer 3
 
-  python3 install.py \
+  python3 -m install \
     --non-interactive \
     --set "INSTANCE_NAME=${instance_name}" \
     --set "DOMAIN=${domain}" \

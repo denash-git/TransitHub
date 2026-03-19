@@ -10,8 +10,6 @@ import secrets
 import string
 import uuid
 
-from .crypto import generate_reality_keypair
-
 
 def utc_timestamp() -> str:
     return datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat()
@@ -55,9 +53,9 @@ ENV_FIELDS = [
     EnvField("TZ", "Europe/Moscow", True, "Container timezone."),
     EnvField("XUI_IMAGE", "ghcr.io/mhsanaei/3x-ui:latest", True, "Official 3x-ui image."),
     EnvField("NGINX_IMAGE", "nginx:1.27-alpine", True, "Reverse proxy image."),
-    EnvField("SUB2SINGBOX_IMAGE", "tindy2013/subconverter:latest", True, "Temporary conversion image placeholder."),
+    EnvField("SUBCONVERTER_IMAGE", "tindy2013/subconverter:latest", True, "Subscription converter image."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
-    EnvField("ENABLE_SUB2SINGBOX", "true", True, "Whether to expose sub2sing-box behind nginx."),
+    EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
     EnvField("ENABLE_EXTENSIONS", "true", True, "Whether nginx loads extension includes."),
     EnvField("FAKE_SITE_TEMPLATE", "signal-wire", True, "Selected fake-site template."),
     EnvField("WEB_SUB_TEMPLATE", "clean-card", True, "Selected web subscription template."),
@@ -75,7 +73,7 @@ ENV_FIELDS = [
     EnvField("SUB_PATH", "", False, "Randomized subscription path segment."),
     EnvField("JSON_PATH", "", False, "Randomized JSON subscription path."),
     EnvField("WEB_PATH", "", False, "Randomized browser helper path."),
-    EnvField("SUB2SINGBOX_PATH", "", False, "Randomized converter path."),
+    EnvField("SUBCONVERTER_PATH", "", False, "Randomized converter path."),
     EnvField("WS_PORT", "", False, "Internal WebSocket transport port."),
     EnvField("WS_PATH", "", False, "Randomized WebSocket path."),
     EnvField("XHTTP_PORT", "", False, "Internal XHTTP transport port."),
@@ -203,7 +201,7 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     fill_if_empty(generated, "SUB_PATH", random_path_token("sub"))
     fill_if_empty(generated, "JSON_PATH", random_path_token("json"))
     fill_if_empty(generated, "WEB_PATH", random_path_token("web"))
-    fill_if_empty(generated, "SUB2SINGBOX_PATH", random_path_token("sb"))
+    fill_if_empty(generated, "SUBCONVERTER_PATH", random_path_token("conv"))
     fill_if_empty(generated, "WS_PORT", str(random_port()))
     fill_if_empty(generated, "WS_PATH", random_path_token("ws"))
     fill_if_empty(generated, "XHTTP_PORT", str(random_port()))
@@ -215,6 +213,8 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     if generated.get("REALITY_PRIVATE_KEY") in {"", "REPLACE_WITH_XRAY_PRIVATE_KEY"} or generated.get(
         "REALITY_PUBLIC_KEY"
     ) in {"", "REPLACE_WITH_XRAY_PUBLIC_KEY"}:
+        from .crypto import generate_reality_keypair
+
         keypair = generate_reality_keypair()
         generated["REALITY_PRIVATE_KEY"] = keypair.private_key
         generated["REALITY_PUBLIC_KEY"] = keypair.public_key

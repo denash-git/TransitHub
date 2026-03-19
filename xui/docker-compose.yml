@@ -27,4 +27,9 @@ services:
       - "${XHTTP_PORT:-3003}"
       - "${TROJAN_PORT:-3002}"
     networks:
-      - stack
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

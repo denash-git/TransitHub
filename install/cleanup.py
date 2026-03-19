@@ -17,7 +17,9 @@ LEGACY_FILES = [
     PROJECT_ROOT / "tmp_xui-pro.sh",
 ]
 REQUIRED_FILES = [
-    PROJECT_ROOT / "docker-compose.yml",
+    PROJECT_ROOT / "nginx" / "docker-compose.yml",
+    PROJECT_ROOT / "xui" / "docker-compose.yml",
+    PROJECT_ROOT / "subconverter" / "docker-compose.yml",
     PROJECT_ROOT / "instance.env",
 ]
 

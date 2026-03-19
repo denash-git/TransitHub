@@ -4,14 +4,13 @@ This repository is a one-shot installer project for `3x-ui`. The intended instal
 
 ## Target layout
 
-- `docker-compose.yml`
 - `instance.env`
 - `.venv/`
 - `templates/`
 - `install/`
 - `nginx/`
 - `xui/`
-- `sub2sing-box/`
+- `subconverter/`
 - `web/`
 - `state/`
 - `docs/`
@@ -23,10 +22,10 @@ Each Docker component has its own root-level directory. Config and data are not 
 
 - `install.sh`
   Bash wrapper with the install menu and first-run prompts.
-- `install.py`
-  Root-level one-shot installer entrypoint for a fresh host.
+- `python3 -m install`
+  Command entrypoint used by the shell wrapper on a fresh host.
 - `install/cli.py`
-  Internal installer module used by the root entrypoint.
+  Internal installer module used by the shell wrapper.
 - `install/project.py`
   Internal command CLI for init, reconfigure, status, host prep, and DB sync.
 - `install/cleanup.py`
@@ -41,15 +40,15 @@ Each Docker component has its own root-level directory. Config and data are not 
 - `nginx/extensions/`
   Nginx extension includes.
 - `nginx/docker-compose.yml`
-  Compose slice for the nginx service.
+  Compose slice for the nginx service and the shared external `proxy-net`.
 - `xui/data/`
   Persistent `3x-ui` data including `x-ui.db`.
 - `xui/docker-compose.yml`
   Compose slice for the `xui` service.
-- `sub2sing-box/data/`
+- `subconverter/data/`
   Converter service data.
-- `sub2sing-box/docker-compose.yml`
-  Compose slice for the converter service.
+- `subconverter/docker-compose.yml`
+  Compose slice for the `conv` converter service.
 - `web/client_page/`
   Rendered subscription landing page and generated `clash.yaml`.
 - `web/fake_site/`
@@ -63,7 +62,7 @@ Each Docker component has its own root-level directory. Config and data are not 
 - Panel credentials and `webBasePath` are re-applied on each `xui` container start.
 - The external panel path is randomized and masked behind nginx.
 - `3x-ui` subscription traffic is handled by its dedicated internal `SUB_PORT` server, not by the panel `webPort`.
-- The root compose file only contains shared project metadata; each service has its own compose file in its own directory.
+- Each service keeps its own compose file, and all services attach to the shared external Docker network `proxy-net`.
 - Baseline inbounds are seeded into `x-ui.db`:
   - `reality`
   - `ws`
@@ -115,11 +114,12 @@ python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
 ./.venv/bin/python -m install init
 ./.venv/bin/python -m install seed-xui-db
+docker network inspect proxy-net >/dev/null 2>&1 || docker network create proxy-net
 docker compose --env-file instance.env \
-  -f docker-compose.yml \
+  --project-directory . \
   -f nginx/docker-compose.yml \
   -f xui/docker-compose.yml \
-  -f sub2sing-box/docker-compose.yml \
+  -f subconverter/docker-compose.yml \
   up -d
 ```
 

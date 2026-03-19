@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  conv:
+    image: ${SUBCONVERTER_IMAGE:-tindy2013/subconverter:latest}
+    restart: unless-stopped
+    volumes:
+      - ./subconverter/data:/base
+    expose:
+      - "25500"
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

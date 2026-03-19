@@ -15,10 +15,9 @@ VENV_DIR = PROJECT_ROOT / ".venv"
 REQUIREMENTS_PATH = PROJECT_ROOT / "requirements.txt"
 XUI_DB_PATH = PROJECT_ROOT / "xui" / "data" / "x-ui.db"
 COMPOSE_FILES = [
-    PROJECT_ROOT / "docker-compose.yml",
     PROJECT_ROOT / "nginx" / "docker-compose.yml",
     PROJECT_ROOT / "xui" / "docker-compose.yml",
-    PROJECT_ROOT / "sub2sing-box" / "docker-compose.yml",
+    PROJECT_ROOT / "subconverter" / "docker-compose.yml",
 ]
 PRUNE_TOP_LEVEL = [
     VENV_DIR,
@@ -28,7 +27,6 @@ PRUNE_TOP_LEVEL = [
     PROJECT_ROOT / "templates",
     PROJECT_ROOT / "README.md",
     PROJECT_ROOT / "requirements.txt",
-    PROJECT_ROOT / "install.py",
     PROJECT_ROOT / "install.sh",
     PROJECT_ROOT / "instance.env.example",
     PROJECT_ROOT / "__pycache__",
@@ -36,8 +34,8 @@ PRUNE_TOP_LEVEL = [
 PRUNE_RUNTIME_DIRS = [
     PROJECT_ROOT / "install" / "host",
     PROJECT_ROOT / "nginx" / "logs",
-    PROJECT_ROOT / "sub2sing-box" / "config",
-    PROJECT_ROOT / "sub2sing-box" / "logs",
+    PROJECT_ROOT / "subconverter" / "config",
+    PROJECT_ROOT / "subconverter" / "logs",
     PROJECT_ROOT / "fake-site",
     PROJECT_ROOT / "web-sub",
     PROJECT_ROOT / "xui" / "backup",
@@ -83,7 +81,8 @@ def main() -> int:
 
     step(6, "Start core containers")
     cleanup_previous_stack()
-    run(compose_command("up", "-d", "xui", "sub2sing-box"))
+    ensure_proxy_network()
+    run(compose_command("up", "-d", "xui", "conv"))
     wait_for_xui_db()
 
     step(7, "Seed panel settings and inbounds")
@@ -244,6 +243,20 @@ def cleanup_previous_stack() -> None:
         run(["docker", "rm", "-f", *container_ids])
 
 
+def ensure_proxy_network() -> None:
+    network_name = "proxy-net"
+    completed = subprocess.run(
+        ["docker", "network", "inspect", network_name],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return
+    run(["docker", "network", "create", network_name])
+
+
 def compose_base_command() -> list[str]:
     if subprocess.run(
         ["docker", "compose", "version"],
@@ -267,7 +280,15 @@ def compose_base_command() -> list[str]:
 def compose_command(*arguments: str) -> list[str]:
     values = load_instance_env(str(venv_python()))
     project_name = values.get("INSTANCE_NAME", "").strip() or "xui-v1"
-    command = [*compose_base_command(), "-p", project_name, "--env-file", "instance.env"]
+    command = [
+        *compose_base_command(),
+        "--project-directory",
+        str(PROJECT_ROOT),
+        "-p",
+        project_name,
+        "--env-file",
+        "instance.env",
+    ]
     for compose_file in COMPOSE_FILES:
         command.extend(["-f", str(compose_file)])
     command.extend(arguments)

@@ -77,7 +77,7 @@
       output.value = [
         `${base}/${SUB_PATH}/${client}`,
         `${base}/${JSON_PATH}/${client}`,
-        `${base}/${SUB2SINGBOX_PATH}/?target=sing-box&name=${client}`,
+        `${base}/${SUBCONVERTER_PATH}/?target=sing-box&name=${client}`,
         `${base}/${WEB_PATH}/clash.yaml?name=${client}`
       ].join("\n");
       const url = new URL(window.location.href);

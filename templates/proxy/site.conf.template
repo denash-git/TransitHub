@@ -115,8 +115,8 @@ server {
         proxy_request_buffering off;
     }
 
-    location /${SUB2SINGBOX_PATH}/ {
-        proxy_pass http://sub2sing-box:25500/;
+    location /${SUBCONVERTER_PATH}/ {
+        proxy_pass http://conv:25500/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
     }
