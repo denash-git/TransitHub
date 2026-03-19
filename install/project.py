@@ -3,14 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 
-from . import paths
-from .host_prepare import prepare_host
-from .runtime import ensure_layout, init_instance, reconfigure_instance, status
-from .xui_db import seed_xui_db, sync_xui_db
-
-
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="3XUI instance bootstrap")
+    parser = argparse.ArgumentParser(description="3XUI instance management")
     subparsers = parser.add_subparsers(dest="command", required=True)
     init_parser = subparsers.add_parser("init", help="Create or refresh a local instance state.")
     init_parser.add_argument("--non-interactive", action="store_true")
@@ -52,11 +46,16 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "ensure-layout":
+        from . import paths
+        from .runtime import ensure_layout
+
         ensure_layout()
         print(paths.PROJECT_ROOT)
         return 0
 
     if args.command == "init":
+        from .runtime import init_instance
+
         print(
             json.dumps(
                 init_instance(
@@ -69,19 +68,26 @@ def main() -> int:
         return 0
 
     if args.command == "reconfigure":
+        from .runtime import reconfigure_instance
+
         print(json.dumps(reconfigure_instance(parse_key_value(args.set)), indent=2))
         return 0
 
     if args.command == "status":
+        from .runtime import status
+
         print(json.dumps(status(), indent=2))
         return 0
 
     if args.command == "prepare-host":
+        from .host import prepare_host
+
         print(json.dumps(prepare_host(), indent=2))
         return 0
 
     if args.command == "sync-xui-db":
         from .runtime import load_instance_env
+        from .xui_db import sync_xui_db
 
         values = load_instance_env()
         print(
@@ -97,6 +103,7 @@ def main() -> int:
 
     if args.command == "seed-xui-db":
         from .runtime import load_instance_env
+        from .xui_db import seed_xui_db
 
         values = load_instance_env()
         print(json.dumps(seed_xui_db(values), indent=2))

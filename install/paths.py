@@ -4,7 +4,6 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BOOTSTRAP_DIR = PROJECT_ROOT / "bootstrap"
 DOCS_DIR = PROJECT_ROOT / "docs"
 TEMP_DIR = PROJECT_ROOT / "temp"
 LEGACY_RUNTIME_DIR = PROJECT_ROOT / "runtime"
@@ -70,7 +69,6 @@ SERVICE_PROXY_EXTENSIONS_DIR = SERVICE_NGINX_EXTENSIONS_DIR
 
 
 REQUIRED_DIRS = [
-    BOOTSTRAP_DIR,
     INSTALL_DIR,
     INSTALL_HOST_DIR,
     SERVICE_NGINX_DIR,

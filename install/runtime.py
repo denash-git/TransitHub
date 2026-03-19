@@ -5,7 +5,7 @@ import json
 import shutil
 
 from . import paths
-from .env_model import (
+from .env import (
     FIELD_PROMPTS,
     PROMPTED_FIELDS,
     defaults,

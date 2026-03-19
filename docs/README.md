@@ -1,13 +1,12 @@
-# 3XUI V1 Bootstrap
+# 3XUI V1 Installer
 
-This repository is a one-shot bootstrap project for `3x-ui`. The intended install location is the target user's home directory, for example `~/3xui`.
+This repository is a one-shot installer project for `3x-ui`. The intended install location is the target user's home directory, for example `~/3xui`.
 
 ## Target layout
 
 - `docker-compose.yml`
 - `instance.env`
 - `.venv/`
-- `bootstrap/`
 - `templates/`
 - `install/`
 - `nginx/`
@@ -26,8 +25,10 @@ Each Docker component has its own root-level directory. Config and data are not 
   Bash wrapper with the install menu and first-run prompts.
 - `install.py`
   Root-level one-shot installer entrypoint for a fresh host.
-- `install/install.py`
+- `install/cli.py`
   Internal installer module used by the root entrypoint.
+- `install/project.py`
+  Internal command CLI for init, reconfigure, status, host prep, and DB sync.
 - `install/cleanup.py`
   Removes legacy layouts after successful migration/install.
 - `install/host/last_prepare.json`
@@ -54,11 +55,11 @@ Each Docker component has its own root-level directory. Config and data are not 
 - `web/fake_site/`
   Rendered fake site.
 - `state/last_status.json`
-  Last bootstrap status snapshot.
+  Last installer status snapshot.
 
 ## Current behavior
 
-- `TZ` is auto-detected from the host where bootstrap runs.
+- `TZ` is auto-detected from the host where the installer runs.
 - Panel credentials and `webBasePath` are re-applied on each `xui` container start.
 - The external panel path is randomized and masked behind nginx.
 - `3x-ui` subscription traffic is handled by its dedicated internal `SUB_PORT` server, not by the panel `webPort`.
@@ -105,15 +106,15 @@ cd ~/3xui
    - timezone, defaulting to the VPS timezone
 6. The installer picks one fake-site template automatically.
 7. The installer creates `.venv`, installs dependencies, prepares the host, prompts or applies required settings, renders service configs, seeds `x-ui.db`, starts Docker Compose, and removes old layout folders.
-8. On the deployed host, the bootstrap sources, installer sources, templates, documentation, temp files, and other non-runtime artifacts are pruned so only the runtime tree remains.
+8. On the deployed host, the installer sources, templates, documentation, temp files, and other non-runtime artifacts are pruned so only the runtime tree remains.
 
 Manual flow is still available:
 
 ```bash
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -r requirements.txt
-./.venv/bin/python -m bootstrap init
-./.venv/bin/python -m bootstrap seed-xui-db
+./.venv/bin/python -m install init
+./.venv/bin/python -m install seed-xui-db
 docker compose --env-file instance.env \
   -f docker-compose.yml \
   -f nginx/docker-compose.yml \

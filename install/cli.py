@@ -22,7 +22,6 @@ COMPOSE_FILES = [
 ]
 PRUNE_TOP_LEVEL = [
     VENV_DIR,
-    PROJECT_ROOT / "bootstrap",
     PROJECT_ROOT / "docs",
     PROJECT_ROOT / "install",
     PROJECT_ROOT / "temp",
@@ -66,12 +65,12 @@ def main() -> int:
     run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
 
     step(2, "Create project layout")
-    run([str(python), "-m", "bootstrap", "ensure-layout"])
+    run([str(python), "-m", "install", "ensure-layout"])
     step(3, "Prepare host dependencies and firewall")
-    run([str(python), "-m", "bootstrap", "prepare-host"])
+    run([str(python), "-m", "install", "prepare-host"])
 
     step(4, "Initialize instance settings")
-    init_command = [str(python), "-m", "bootstrap", "init"]
+    init_command = [str(python), "-m", "install", "init"]
     if args.non_interactive:
         init_command.append("--non-interactive")
     for key, value in overrides.items():
@@ -88,7 +87,7 @@ def main() -> int:
     wait_for_xui_db()
 
     step(7, "Seed panel settings and inbounds")
-    run([str(python), "-m", "bootstrap", "seed-xui-db"])
+    run([str(python), "-m", "install", "seed-xui-db"])
 
     step(8, "Start full stack")
     run(compose_command("up", "-d", "--force-recreate", "--remove-orphans"))
@@ -195,7 +194,7 @@ def install_python_venv_support() -> None:
 
 def load_instance_env(python: str) -> dict[str, str]:
     completed = subprocess.run(
-        [python, "-c", "from bootstrap.runtime import load_instance_env; import json; print(json.dumps(load_instance_env()))"],
+        [python, "-c", "from install.runtime import load_instance_env; import json; print(json.dumps(load_instance_env()))"],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
@@ -210,7 +209,7 @@ def issue_certificate(python: str, domain: str, email: str) -> None:
             python,
             "-c",
             (
-                "from bootstrap.certbot import ensure_certificate; "
+                "from install.certbot import ensure_certificate; "
                 f"ensure_certificate({domain!r}, {email!r})"
             ),
         ],

@@ -4,8 +4,10 @@ This directory contains the clean-host entrypoint and host-side artifacts.
 
 - `../install.sh`
   Bash wrapper with the first-run menu for domain and timezone.
-- `install.py`
-  One-shot installer used after cloning the repository.
+- `cli.py`
+  One-shot installer logic used by the root `install.py` wrapper.
+- `project.py`
+  Internal command CLI for setup, reconfigure, status, and database operations.
 - `cleanup.py`
   Removes old layouts and temporary migration artifacts after a successful run.
 - `host/`
