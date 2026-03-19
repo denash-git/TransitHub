@@ -39,7 +39,19 @@ def log(message: str) -> None:
 
 
 def run(command: list[str]) -> None:
-    subprocess.run(command, check=True)
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    if completed.returncode == 0:
+        return
+    if completed.stdout:
+        print(completed.stdout)
+    if completed.stderr:
+        print(completed.stderr)
+    raise subprocess.CalledProcessError(
+        completed.returncode,
+        command,
+        output=completed.stdout,
+        stderr=completed.stderr,
+    )
 
 
 def command_exists(command: str) -> bool:
@@ -55,18 +67,18 @@ def command_works(command: list[str]) -> bool:
 
 def ensure_ufw_rules() -> None:
     log("Set ufw defaults")
-    subprocess.run(["ufw", "default", "deny", "incoming"], check=True)
-    subprocess.run(["ufw", "default", "allow", "outgoing"], check=True)
+    run(["ufw", "default", "deny", "incoming"])
+    run(["ufw", "default", "allow", "outgoing"])
     log("Open required firewall ports: 22, 80, 443")
     for rule in UFW_RULES:
-        subprocess.run(rule, check=True)
+        run(rule)
     log("Enable ufw")
-    subprocess.run(["ufw", "--force", "enable"], check=True)
+    run(["ufw", "--force", "enable"])
 
 
 def ensure_docker_service() -> None:
     log("Enable and start docker service")
-    subprocess.run(["systemctl", "enable", "--now", "docker"], check=True)
+    run(["systemctl", "enable", "--now", "docker"])
 
 
 def ufw_allows(port: str) -> bool:

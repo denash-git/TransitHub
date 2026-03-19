@@ -57,7 +57,6 @@ ENV_FIELDS = [
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
     EnvField("ENABLE_EXTENSIONS", "true", True, "Whether nginx loads extension includes."),
-    EnvField("FORCE_DARK_THEME", "true", True, "Inject a frontend hack that enables dark theme in 3x-ui by default."),
     EnvField("FAKE_SITE_TEMPLATE", "signal-wire", True, "Selected fake-site template."),
     EnvField("WEB_SUB_TEMPLATE", "clean-card", True, "Selected web subscription template."),
     EnvField("CLASH_TEMPLATE", "default", True, "Selected Clash template."),

@@ -88,9 +88,9 @@ def run_install() -> int:
 
     step(3, "Install Python packages")
     note("Upgrade pip in project virtual environment")
-    run([str(python), "-m", "pip", "install", "--upgrade", "pip"], stream_output=True)
+    run([str(python), "-m", "pip", "install", "--upgrade", "pip"])
     note("Install installer Python dependencies")
-    run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)], stream_output=True)
+    run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
 
     step(4, "Create project layout")
     run([str(python), "-m", "install", "ensure-layout"])
@@ -117,7 +117,7 @@ def run_install() -> int:
     note("Create or reuse external Docker network proxy-net")
     ensure_proxy_network()
     note("Start xui and conv containers")
-    run(compose_command("up", "-d", "xui", "conv"), stream_output=True)
+    run(compose_command("up", "-d", "xui", "conv"))
     note("Wait for xui service startup")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
@@ -128,7 +128,7 @@ def run_install() -> int:
 
     step(10, "Start full stack and finalize deployment")
     note("Start all runtime services")
-    run(compose_command("up", "-d", "--force-recreate", "--remove-orphans"), stream_output=True)
+    run(compose_command("up", "-d", "--force-recreate", "--remove-orphans"))
     note("Wait for nginx, xui, and conv services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
@@ -326,7 +326,7 @@ def install_python_venv_support() -> None:
     ]
 
     note("Refresh apt package lists for Python venv support")
-    run(["apt-get", "update"], stream_output=True)
+    run(["apt-get", "update"])
     failures: list[tuple[list[str], str, str]] = []
     for packages in attempts:
         completed = subprocess.run(
@@ -373,8 +373,7 @@ def issue_certificate(python: str, domain: str, email: str) -> None:
                 "from install.certbot import ensure_certificate; "
                 f"ensure_certificate({domain!r}, {email!r})"
             ),
-        ],
-        stream_output=True,
+        ]
     )
 
 

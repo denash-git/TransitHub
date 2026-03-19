@@ -1,3 +1,0 @@
-sub_filter_once off;
-sub_filter_types text/html;
-sub_filter '</body>' '<script>(function(){try{localStorage.setItem("dark-mode","true");}catch(e){}})();</script></body>';

@@ -13,7 +13,6 @@ YELLOW=$'\033[1;33m'
 GREEN=$'\033[1;32m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
-PROMPT_COUNT=0
 
 spacer() {
   local lines="${1:-1}"
@@ -33,11 +32,11 @@ frame() {
 
   printf '\033c'
   spacer 3
-  printf '%b\n' "${YELLOW}${top}${RESET}"
-  printf '%s %-60s %s\n' "$side" "$title" "$side"
-  printf '%b\n' "${GREEN}${mid}${RESET}"
-  printf '%s %-60s %s\n' "$side" "$subtitle" "$side"
-  printf '%b\n' "${YELLOW}${bottom}${RESET}"
+  printf '%b%s%b\n' "$YELLOW" "$top" "$RESET"
+  printf '%b%s %-60s %s%b\n' "$YELLOW" "$side" "$title" "$side" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$mid" "$RESET"
+  printf '%b%s %-60s %s%b\n' "$GREEN" "$side" "$subtitle" "$side" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "$bottom" "$RESET"
   spacer 3
 }
 
@@ -46,10 +45,6 @@ prompt_default() {
   local default_value="$2"
   local note="${3:-}"
   local value
-
-  if (( PROMPT_COUNT > 0 )); then
-    printf '\n' > /dev/tty
-  fi
 
   printf '%b%s%b [%s]: ' "$BOLD" "$label" "$RESET" "$default_value" > /dev/tty
   IFS= read -r value < /dev/tty
@@ -62,7 +57,6 @@ prompt_default() {
     printf '\n%bNotice:%b %s\n\n' "$BOLD" "$RESET" "$note" > /dev/tty
   fi
 
-  PROMPT_COUNT=$((PROMPT_COUNT + 1))
   printf '%s' "$value"
 }
 
@@ -87,6 +81,7 @@ main() {
   instance_name="$(hostname -s)"
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
+  printf '\n' > /dev/tty
   tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"
 
