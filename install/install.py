@@ -81,8 +81,11 @@ def main() -> int:
 
 
 def ensure_venv() -> None:
-    if VENV_DIR.exists():
+    if venv_ready():
         return
+    ensure_system_venv_support()
+    if VENV_DIR.exists():
+        shutil.rmtree(VENV_DIR, ignore_errors=True)
     command = [sys.executable, "-m", "venv", str(VENV_DIR)]
     try:
         run(command)
@@ -90,6 +93,8 @@ def ensure_venv() -> None:
         if not should_install_venv_support(exc):
             raise
         install_python_venv_support()
+        if VENV_DIR.exists():
+            shutil.rmtree(VENV_DIR, ignore_errors=True)
         run(command)
 
 
@@ -97,6 +102,35 @@ def venv_python() -> Path:
     if os.name == "nt":
         return VENV_DIR / "Scripts" / "python.exe"
     return VENV_DIR / "bin" / "python"
+
+
+def venv_ready() -> bool:
+    python = venv_python()
+    if not VENV_DIR.exists() or not python.exists():
+        return False
+    completed = subprocess.run(
+        [str(python), "-c", "import sys; print(sys.executable)"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return completed.returncode == 0
+
+
+def ensure_system_venv_support() -> None:
+    if os.name == "nt" or shutil.which("apt-get") is None:
+        return
+    completed = subprocess.run(
+        [sys.executable, "-Im", "ensurepip", "--version"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return
+    install_python_venv_support()
 
 
 def should_install_venv_support(error: subprocess.CalledProcessError) -> bool:
