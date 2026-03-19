@@ -1,6 +1,28 @@
 # 3XUI V1
 
-Target flow:
+## Quick Start On Debian VPS
+
+Run on a fresh Debian VPS as `root` or through `sudo`:
+
+```bash
+apt-get update
+apt-get install -y git
+git clone https://github.com/denash-git/3xui ~/3xui
+cd ~/3xui
+bash install.sh
+```
+
+If you clone with SSH instead of HTTPS:
+
+```bash
+git clone git@github.com:denash-git/3xui.git ~/3xui
+cd ~/3xui
+bash install.sh
+```
+
+The installer prepares host packages itself and configures Docker, Docker Compose, certbot, and `ufw`.
+
+## Target Flow
 
 ```bash
 cd ~/3xui

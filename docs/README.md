@@ -77,15 +77,36 @@ Each Docker component has its own root-level directory. Config and data are not 
 
 Expected clean-host flow:
 
-1. Clone the repository into the target user's home directory.
-2. Run `bash install.sh`.
-3. The menu collects the primary settings:
+1. On a fresh Debian VPS, log in as `root` or use a sudo-capable user.
+2. Install Git if it is missing:
+
+```bash
+apt-get update
+apt-get install -y git
+```
+
+3. Clone the repository into the target user's home directory:
+
+```bash
+git clone https://github.com/denash-git/3xui ~/3xui
+cd ~/3xui
+```
+
+SSH clone also works if the server has a GitHub key configured:
+
+```bash
+git clone git@github.com:denash-git/3xui.git ~/3xui
+cd ~/3xui
+```
+
+4. Run `bash install.sh`.
+5. The menu collects the primary settings:
    - main domain
    - REALITY domain
    - timezone, defaulting to the VPS timezone
-4. The installer picks one fake-site template automatically.
-5. The installer creates `.venv`, installs dependencies, prepares the host, prompts or applies required settings, renders service configs, seeds `x-ui.db`, starts Docker Compose, and removes old layout folders.
-5. On the deployed host, documentation, temp files, and unselected fake-site templates are pruned.
+6. The installer picks one fake-site template automatically.
+7. The installer creates `.venv`, installs dependencies, prepares the host, prompts or applies required settings, renders service configs, seeds `x-ui.db`, starts Docker Compose, and removes old layout folders.
+8. On the deployed host, documentation, temp files, and unselected fake-site templates are pruned.
 
 Manual flow is still available:
 
