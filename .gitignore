@@ -2,7 +2,6 @@
 __pycache__/
 *.pyc
 instance.env
-state/last_status.json
 nginx/config/*.conf
 !nginx/config/.gitkeep
 nginx/extensions/*.conf
@@ -18,6 +17,3 @@ subconverter/data/*
 !subconverter/data/.gitkeep
 install/host/last_prepare.json
 .ssh/
-temp/*
-!temp/.gitkeep
-!temp/README.md

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 import shutil
 
 from . import paths
@@ -28,8 +27,6 @@ def ensure_layout() -> None:
 def migrate_legacy_layout() -> None:
     copy_if_missing(paths.LEGACY_INSTANCE_ENV_PATH, paths.INSTANCE_ENV_PATH)
     copy_if_missing(paths.LEGACY_DEPLOY_INSTANCE_ENV_PATH, paths.INSTANCE_ENV_PATH)
-    copy_if_missing(paths.LEGACY_STATUS_FILE_PATH, paths.STATUS_FILE_PATH)
-    copy_if_missing(paths.LEGACY_DEPLOY_STATUS_FILE_PATH, paths.STATUS_FILE_PATH)
     copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_PROXY_RENDERED_DIR, paths.SERVICE_PROXY_CONFIG_DIR)
     copy_tree_contents_if_missing(
         paths.LEGACY_RUNTIME_PROXY_EXTENSIONS_DIR,
@@ -177,7 +174,7 @@ def reconfigure_instance(overrides: dict[str, str] | None = None) -> dict[str, o
 def status() -> dict[str, object]:
     ensure_layout()
     values = load_instance_env()
-    result = {
+    return {
         "instance_initialized": values.get("INSTANCE_INITIALIZED", "false"),
         "domain": values.get("DOMAIN", ""),
         "reality_domain": values.get("REALITY_DOMAIN", ""),
@@ -190,9 +187,6 @@ def status() -> dict[str, object]:
             str(path) for path in paths.SERVICE_NGINX_CONFIG_DIR.glob("*.conf")
         ),
     }
-    paths.STATUS_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    paths.STATUS_FILE_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    return result
 
 
 def panel_url(values: dict[str, str]) -> str:

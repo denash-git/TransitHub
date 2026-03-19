@@ -24,7 +24,6 @@ PRUNE_TOP_LEVEL = [
     VENV_DIR,
     PROJECT_ROOT / "docs",
     PROJECT_ROOT / "install",
-    PROJECT_ROOT / "temp",
     PROJECT_ROOT / "templates",
     PROJECT_ROOT / "README.md",
     PROJECT_ROOT / "requirements.txt",

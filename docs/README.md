@@ -110,7 +110,6 @@ Fake-site шаблон выбирается автоматически.
 - `install/`
 - `templates/`
 - `docs/`
-- `temp/`
 - `README.md`
 - `requirements.txt`
 - `install.sh`
@@ -123,8 +122,6 @@ Fake-site шаблон выбирается автоматически.
 - `xui/`
 - `subconverter/`
 - `web/`
-
-`state/` теперь не создаётся автоматически. Он появится только если отдельно вызвать статусную команду.
 
 ## Runtime-структура
 
@@ -310,7 +307,6 @@ python3 -m install seed-xui-db
 - ранние падения на `python3-venv` закрыты
 - fallback на `docker-compose` для Debian закрыт
 - installer UI стал подробнее
-- пустая `state/` больше не создаётся без необходимости
 
 ## Ограничения и честные замечания
 
