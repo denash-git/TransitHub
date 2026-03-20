@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  tgproxy:
+    image: ${TGPROXY_IMAGE:-nineseconds/mtg:2}
+    restart: unless-stopped
+    volumes:
+      - ./tgproxy/config.toml:/config.toml:ro
+    expose:
+      - "${TGPROXY_PORT:-3128}"
+    networks:
+      proxy-net:
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

@@ -4,9 +4,9 @@ from pathlib import Path
 import shutil
 
 from .certbot import certificate_status
-from .mtproxy import enabled as mtproxy_enabled
-from .mtproxy import tg_link as mtproxy_tg_link
-from .mtproxy import validate as validate_mtproxy
+from .tgproxy import enabled as tgproxy_enabled
+from .tgproxy import tg_link as tgproxy_tg_link
+from .tgproxy import validate as validate_tgproxy
 from . import paths
 from .env import (
     FIELD_PROMPTS,
@@ -102,7 +102,7 @@ def validate_templates(values: dict[str, str]) -> None:
     missing = [str(path) for path in expected if not path.exists()]
     if missing:
         raise FileNotFoundError("Missing templates:\n" + "\n".join(missing))
-    validate_mtproxy(values)
+    validate_tgproxy(values)
 
 
 def validate_cert_path(values: dict[str, str]) -> list[str]:
@@ -128,8 +128,20 @@ def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
         label = FIELD_PROMPTS.get(key, key)
         if key == "TZ":
             entered = input(f"{label} [{current}, Enter = keep default]: ").strip()
-        elif key == "MTPROXY_TLS_DOMAIN":
+        elif key == "TGPROXY_PUBLIC_HOST":
             entered = input(f"{label} [{current or 'disabled'}]: ").strip()
+            if entered == "-":
+                prompted["TGPROXY_PUBLIC_HOST"] = ""
+                prompted["TGPROXY_FAKETLS_DOMAIN"] = ""
+                continue
+        elif key == "TGPROXY_FAKETLS_DOMAIN":
+            if not prompted.get("TGPROXY_PUBLIC_HOST", "").strip():
+                continue
+            entered = input(f"{label} [{current}]: ").strip()
+            if entered == "-":
+                prompted["TGPROXY_FAKETLS_DOMAIN"] = ""
+                prompted["TGPROXY_PUBLIC_HOST"] = ""
+                continue
         else:
             entered = input(f"{label} [{current}]: ").strip()
         if entered:
@@ -141,8 +153,10 @@ def apply_overrides(values: dict[str, str], overrides: dict[str, str] | None) ->
     merged = dict(values)
     if overrides:
         merged.update(overrides)
-        if "MTPROXY_TLS_DOMAIN" in overrides and "MTPROXY_PUBLIC_HOST" not in overrides:
-            merged["MTPROXY_PUBLIC_HOST"] = ""
+        if "TGPROXY_PUBLIC_HOST" in overrides and "TGPROXY_FAKETLS_DOMAIN" not in overrides:
+            merged["TGPROXY_SECRET"] = ""
+        if "TGPROXY_FAKETLS_DOMAIN" in overrides and "TGPROXY_SECRET" not in overrides:
+            merged["TGPROXY_SECRET"] = ""
     return sync_derived_fields(merged)
 
 
@@ -190,9 +204,10 @@ def status() -> dict[str, object]:
         "domain": values.get("DOMAIN", ""),
         "reality_domain": values.get("REALITY_DOMAIN", ""),
         "certbot_staging": staging,
-        "mtproxy_enabled": mtproxy_enabled(values),
-        "mtproxy_tls_domain": values.get("MTPROXY_TLS_DOMAIN", ""),
-        "mtproxy_link": mtproxy_tg_link(values),
+        "tgproxy_enabled": tgproxy_enabled(values),
+        "tgproxy_public_host": values.get("TGPROXY_PUBLIC_HOST", ""),
+        "tgproxy_faketls_domain": values.get("TGPROXY_FAKETLS_DOMAIN", ""),
+        "tgproxy_link": tgproxy_tg_link(values),
         "panel_url": panel_url(values),
         "subscription_url": subscription_url(values),
         "web_url": web_url(values),

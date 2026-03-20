@@ -88,7 +88,7 @@ detect_tz() {
 }
 
 main() {
-  local tz domain reality_domain mtproxy_tls_domain fake_site instance_name mtproxy_state
+  local tz domain reality_domain tgproxy_public_host tgproxy_faketls_domain fake_site instance_name tgproxy_state
   local -a install_args
 
   frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
@@ -96,27 +96,37 @@ main() {
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
   printf '\n' > /dev/tty
-  printf '%b%s%b [tg.%s]: ' "$BOLD" 'MTProxy TLS domain' "$RESET" "$domain" > /dev/tty
-  IFS= read -r mtproxy_tls_domain < /dev/tty
-  if [[ -z "$mtproxy_tls_domain" ]]; then
-    mtproxy_tls_domain="tg.${domain}"
-  elif [[ "$mtproxy_tls_domain" == "-" ]]; then
-    mtproxy_tls_domain=""
+  printf '%b%s%b [tg.%s]: ' "$BOLD" 'Telegram proxy host' "$RESET" "$domain" > /dev/tty
+  IFS= read -r tgproxy_public_host < /dev/tty
+  if [[ -z "$tgproxy_public_host" ]]; then
+    tgproxy_public_host="tg.${domain}"
+  elif [[ "$tgproxy_public_host" == "-" ]]; then
+    tgproxy_public_host=""
+  fi
+  printf '\n' > /dev/tty
+  if [[ -n "$tgproxy_public_host" ]]; then
+    printf '%b%s%b [google.com]: ' "$BOLD" 'Telegram FakeTLS domain' "$RESET" > /dev/tty
+    IFS= read -r tgproxy_faketls_domain < /dev/tty
+    if [[ -z "$tgproxy_faketls_domain" ]]; then
+      tgproxy_faketls_domain="google.com"
+    fi
+  else
+    tgproxy_faketls_domain=""
   fi
   printf '\n' > /dev/tty
   tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"
-  if [[ -n "$mtproxy_tls_domain" ]]; then
-    mtproxy_state="$mtproxy_tls_domain"
+  if [[ -n "$tgproxy_public_host" ]]; then
+    tgproxy_state="${tgproxy_public_host} / ${tgproxy_faketls_domain}"
   else
-    mtproxy_state='disabled'
+    tgproxy_state='disabled'
   fi
 
   spacer 3
   printf '%bStarting install with:%b\n' "$BOLD" "$RESET"
   printf '  domain    : %s\n' "$domain"
   printf '  reality   : %s\n' "$reality_domain"
-  printf '  mtproxy   : %s\n' "$mtproxy_state"
+  printf '  tgproxy   : %s\n' "$tgproxy_state"
   printf '  timezone  : %s\n' "$tz"
   printf '  fake site : %s\n' "$fake_site"
   spacer 3
@@ -127,7 +137,8 @@ main() {
     --set "INSTANCE_NAME=${instance_name}"
     --set "DOMAIN=${domain}"
     --set "REALITY_DOMAIN=${reality_domain}"
-    --set "MTPROXY_TLS_DOMAIN=${mtproxy_tls_domain}"
+    --set "TGPROXY_PUBLIC_HOST=${tgproxy_public_host}"
+    --set "TGPROXY_FAKETLS_DOMAIN=${tgproxy_faketls_domain}"
     --set "TZ=${tz}"
     --set "FAKE_SITE_TEMPLATE=${fake_site}"
   )

@@ -10,9 +10,8 @@ import string
 import subprocess
 import uuid
 
-from .mtproxy import base_secret as generate_mtproxy_secret
-from .mtproxy import client_secret as build_mtproxy_client_secret
 from .certbot import cert_name_for
+from .tgproxy import secret as generate_tgproxy_secret
 
 
 def utc_timestamp() -> str:
@@ -58,23 +57,16 @@ ENV_FIELDS = [
     EnvField("XUI_IMAGE", "ghcr.io/mhsanaei/3x-ui:latest", True, "Official 3x-ui image."),
     EnvField("NGINX_IMAGE", "nginx:1.27-alpine", True, "Reverse proxy image."),
     EnvField("SUBCONVERTER_IMAGE", "tindy2013/subconverter:latest", True, "Subscription converter image."),
-    EnvField("MTPROXY_IMAGE", "mtproxy:local", True, "Official Telegram MTProxy image built locally."),
+    EnvField("TGPROXY_IMAGE", "nineseconds/mtg:2", True, "Telegram proxy container image."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
-    EnvField("ENABLE_MTPROXY", "false", True, "Whether to run official Telegram MTProxy TLS transport."),
+    EnvField("ENABLE_TGPROXY", "false", True, "Whether to run the Telegram proxy service."),
     EnvField("ENABLE_EXTENSIONS", "true", True, "Whether nginx loads extension includes."),
     EnvField("FAKE_SITE_TEMPLATE", "signal-wire", True, "Selected fake-site template."),
     EnvField("WEB_SUB_TEMPLATE", "clean-card", True, "Selected web subscription template."),
     EnvField("CLASH_TEMPLATE", "default", True, "Selected Clash template."),
-    EnvField("MTPROXY_TLS_DOMAIN", "", True, "Public TLS domain used as MTProxy TLS-transport SNI."),
-    EnvField("MTPROXY_PUBLIC_HOST", "", True, "Hostname or IP used in tg:// MTProxy links."),
-    EnvField("MTPROXY_TAG", "", True, "Optional MTProxyBot advertising tag."),
-    EnvField("MTPROXY_WORKERS", "1", True, "MTProxy worker count; keep 1 for TLS transport."),
-    EnvField("MTPROXY_TLS_BACKEND_PORT", "9444", False, "Internal nginx HTTPS backend port dedicated to MTProxy fake TLS."),
-    EnvField("MTPROXY_LOOP_NETWORK", "mtproxy-loop-net", False, "Dedicated Docker network used for MTProxy self-check routing."),
-    EnvField("MTPROXY_LOOP_SUBNET", "172.29.100.0/24", False, "Dedicated Docker subnet used for MTProxy self-check routing."),
-    EnvField("MTPROXY_LOOP_NGINX_IP", "172.29.100.10", False, "Static nginx IP on the MTProxy loop network."),
-    EnvField("MTPROXY_LOOP_MTPROXY_IP", "172.29.100.11", False, "Static MTProxy IP on the MTProxy loop network."),
+    EnvField("TGPROXY_PUBLIC_HOST", "", True, "Hostname or IP used in tg:// Telegram proxy links."),
+    EnvField("TGPROXY_FAKETLS_DOMAIN", "google.com", True, "External FakeTLS/fronting domain encoded into the Telegram proxy secret."),
     EnvField("CERTBOT_EMAIL", "", True, "Optional Let's Encrypt registration email."),
     EnvField("CERTBOT_STAGING", "false", True, "Use Let's Encrypt staging instead of production."),
     EnvField("CERT_LIVE_DIR", "/etc/letsencrypt/live/example.com", True, "Host certificate directory mounted into runtime."),
@@ -96,10 +88,11 @@ ENV_FIELDS = [
     EnvField("XHTTP_PATH", "", False, "Randomized XHTTP path."),
     EnvField("TROJAN_PORT", "", False, "Internal Trojan gRPC port."),
     EnvField("TROJAN_PATH", "", False, "Randomized Trojan path."),
-    EnvField("MTPROXY_PORT", "3443", False, "Internal MTProxy client port."),
-    EnvField("MTPROXY_STATS_PORT", "2398", False, "Internal MTProxy stats port."),
-    EnvField("MTPROXY_SECRET", "", False, "Base 16-byte MTProxy secret in hex."),
-    EnvField("MTPROXY_CLIENT_SECRET", "", False, "Client-facing MTProxy secret with transport prefix."),
+    EnvField("STREAM_TGPROXY_PORT", "9445", False, "Internal nginx stream handoff port dedicated to Telegram proxy traffic."),
+    EnvField("STREAM_PANEL_PORT", "9446", False, "Internal nginx stream handoff port for panel HTTPS."),
+    EnvField("STREAM_REALITY_PORT", "9447", False, "Internal nginx stream handoff port for REALITY passthrough."),
+    EnvField("TGPROXY_PORT", "3128", False, "Internal Telegram proxy listen port."),
+    EnvField("TGPROXY_SECRET", "", False, "Client-facing Telegram proxy FakeTLS secret."),
     EnvField("CONFIG_USERNAME", "", False, "Panel username."),
     EnvField("CONFIG_PASSWORD", "", False, "Panel password."),
     EnvField("REALITY_PRIVATE_KEY", "", False, "REALITY private key placeholder."),
@@ -122,7 +115,8 @@ FAKE_SITE_TEMPLATES = [
 PROMPTED_FIELDS = [
     "DOMAIN",
     "REALITY_DOMAIN",
-    "MTPROXY_TLS_DOMAIN",
+    "TGPROXY_PUBLIC_HOST",
+    "TGPROXY_FAKETLS_DOMAIN",
     "TZ",
     "WEB_SUB_TEMPLATE",
 ]
@@ -130,7 +124,8 @@ PROMPTED_FIELDS = [
 FIELD_PROMPTS = {
     "DOMAIN": "Main domain",
     "REALITY_DOMAIN": "REALITY domain",
-    "MTPROXY_TLS_DOMAIN": "MTProxy TLS domain",
+    "TGPROXY_PUBLIC_HOST": "Telegram proxy host",
+    "TGPROXY_FAKETLS_DOMAIN": "Telegram FakeTLS domain",
     "TZ": "Timezone",
     "WEB_SUB_TEMPLATE": "Web subscription template",
 }
@@ -245,14 +240,10 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     fill_if_empty(generated, "CLIENT_UUID_2", str(uuid.uuid4()))
     fill_if_empty(generated, "CLIENT_UUID_3", str(uuid.uuid4()))
     fill_if_empty(generated, "TROJAN_PASSWORD", random_token(28))
-    if generated.get("ENABLE_MTPROXY", "").strip().lower() == "true":
-        fill_if_empty(generated, "MTPROXY_SECRET", generate_mtproxy_secret())
-        generated["MTPROXY_CLIENT_SECRET"] = build_mtproxy_client_secret(
-            generated["MTPROXY_SECRET"],
-            generated.get("MTPROXY_TLS_DOMAIN", ""),
-        )
+    if generated.get("ENABLE_TGPROXY", "").strip().lower() == "true":
+        fill_if_empty(generated, "TGPROXY_SECRET", generate_tgproxy_secret(generated.get("TGPROXY_FAKETLS_DOMAIN", "")))
     else:
-        generated["MTPROXY_CLIENT_SECRET"] = ""
+        generated["TGPROXY_SECRET"] = ""
     return generated
 
 
@@ -281,8 +272,8 @@ def ensure_unique_port(values: dict[str, str], key: str) -> None:
 def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
     synced = dict(values)
     domain = synced.get("DOMAIN", "").strip()
-    mtproxy_tls_domain = synced.get("MTPROXY_TLS_DOMAIN", "").strip()
-    mtproxy_public_host = synced.get("MTPROXY_PUBLIC_HOST", "").strip()
+    tgproxy_public_host = synced.get("TGPROXY_PUBLIC_HOST", "").strip()
+    tgproxy_faketls_domain = synced.get("TGPROXY_FAKETLS_DOMAIN", "").strip()
     staging = synced.get("CERTBOT_STAGING", "false").strip().lower() == "true"
     if domain:
         desired_cert_dir = f"/etc/letsencrypt/live/{cert_name_for(domain, staging)}"
@@ -292,12 +283,14 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
             "/etc/letsencrypt/live/example.com",
             f"/etc/letsencrypt/live/{domain}",
             desired_cert_dir,
-        }:
+        } or current_cert_dir.startswith("/etc/letsencrypt/live/"):
             synced["CERT_LIVE_DIR"] = desired_cert_dir
-        if not mtproxy_public_host or (mtproxy_tls_domain and mtproxy_public_host == domain):
-            synced["MTPROXY_PUBLIC_HOST"] = mtproxy_tls_domain or domain
-    synced["ENABLE_MTPROXY"] = (
-        "true" if synced.get("MTPROXY_TLS_DOMAIN", "").strip() else "false"
+        if tgproxy_faketls_domain and (not tgproxy_public_host or tgproxy_public_host == domain):
+            synced["TGPROXY_PUBLIC_HOST"] = f"tg.{domain}"
+    synced["ENABLE_TGPROXY"] = (
+        "true"
+        if synced.get("TGPROXY_PUBLIC_HOST", "").strip() and tgproxy_faketls_domain
+        else "false"
     )
     synced["FAKE_SITE_TEMPLATE"] = pick_fake_site_template(synced.get("FAKE_SITE_TEMPLATE", ""))
     return synced

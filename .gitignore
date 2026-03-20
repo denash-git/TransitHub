@@ -15,7 +15,6 @@ xui/data/*
 !xui/data/.gitkeep
 subconverter/data/*
 !subconverter/data/.gitkeep
-mtproxy/data/*
-!mtproxy/data/.gitkeep
+tgproxy/config.toml
 install/host/last_prepare.json
 .ssh/
