@@ -14,6 +14,8 @@ services:
       MTPROXY_PORT: ${MTPROXY_PORT:-3443}
       MTPROXY_STATS_PORT: ${MTPROXY_STATS_PORT:-2398}
       MTPROXY_WORKERS: ${MTPROXY_WORKERS:-1}
+    extra_hosts:
+      - "${MTPROXY_TLS_DOMAIN}:${MTPROXY_LOOP_NGINX_IP:-172.29.100.10}"
     volumes:
       - ./mtproxy/data:/data
     expose:
@@ -25,9 +27,14 @@ services:
       retries: 6
       start_period: 15s
     networks:
-      - proxy-net
+      proxy-net:
+      mtproxy-loop-net:
+        ipv4_address: ${MTPROXY_LOOP_MTPROXY_IP:-172.29.100.11}
 
 networks:
   proxy-net:
     external: true
     name: proxy-net
+  mtproxy-loop-net:
+    external: true
+    name: ${MTPROXY_LOOP_NETWORK:-mtproxy-loop-net}

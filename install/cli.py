@@ -118,7 +118,7 @@ def run_install() -> int:
     note(f"Resolve main domain {values['DOMAIN']}")
     resolve_domain_or_raise(values["DOMAIN"])
     resolve_mtproxy_tls_domain(values)
-    cert_result = issue_certificate(values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
+    cert_result = issue_certificate(values)
     cert_dir = cert_result["cert_dir"]
     if cert_dir and cert_dir != values.get("CERT_LIVE_DIR", ""):
         note(f"Use certificate path {cert_dir}")
@@ -128,8 +128,14 @@ def run_install() -> int:
 
     step(8, "Start core containers")
     cleanup_previous_stack()
-    note("Create or reuse external Docker network proxy-net")
-    ensure_proxy_network()
+    if mtproxy_enabled(values):
+        note(
+            "Create or reuse external Docker networks "
+            f"proxy-net and {values.get('MTPROXY_LOOP_NETWORK', 'mtproxy-loop-net')}"
+        )
+    else:
+        note("Create or reuse external Docker network proxy-net")
+    ensure_runtime_networks(values)
     note(f"Start {', '.join(enabled_services)} containers")
     note("First run may take a few minutes while Docker pulls images and builds MTProxy")
     run(
@@ -399,11 +405,18 @@ def load_instance_env(python: str) -> dict[str, str]:
     return json.loads(completed.stdout)
 
 
-def issue_certificate(domain: str, email: str) -> dict[str, object]:
-    values = load_instance_env(str(venv_python()))
+def certificate_request_domains(values: dict[str, str]) -> list[str]:
+    domains = [values["DOMAIN"]]
+    if mtproxy_enabled(values):
+        domains.append(values["MTPROXY_TLS_DOMAIN"])
+    return domains
+
+
+def issue_certificate(values: dict[str, str]) -> dict[str, object]:
     staging = values.get("CERTBOT_STAGING", "false").strip().lower() == "true"
+    domains = certificate_request_domains(values)
     try:
-        return ensure_certificate(domain, email, staging=staging)
+        return ensure_certificate(domains, values.get("CERTBOT_EMAIL", ""), staging=staging)
     except CertbotError as exc:
         raise InstallerError(str(exc)) from exc
 
@@ -442,18 +455,41 @@ def cleanup_previous_stack(preflight: bool = False) -> None:
         run(["docker", "rm", "-f", *container_ids], stream_output=True)
 
 
-def ensure_proxy_network() -> None:
-    network_name = "proxy-net"
+def ensure_runtime_networks(values: dict[str, str]) -> None:
+    ensure_external_bridge_network("proxy-net")
+    if mtproxy_enabled(values):
+        ensure_external_bridge_network(
+            values.get("MTPROXY_LOOP_NETWORK", "mtproxy-loop-net"),
+            values.get("MTPROXY_LOOP_SUBNET", "172.29.100.0/24"),
+        )
+
+
+def ensure_external_bridge_network(name: str, subnet: str | None = None) -> None:
     completed = subprocess.run(
-        ["docker", "network", "inspect", network_name],
+        ["docker", "network", "inspect", name, "--format", "{{json .}}"],
         cwd=PROJECT_ROOT,
         check=False,
         capture_output=True,
         text=True,
     )
     if completed.returncode == 0:
+        details = json.loads(completed.stdout)
+        if details.get("Driver") != "bridge" or details.get("Internal", False):
+            raise InstallerError(f"Docker network `{name}` exists, but it is not a usable external bridge network.")
+        if subnet:
+            configs = details.get("IPAM", {}).get("Config") or []
+            current_subnets = {config.get("Subnet", "") for config in configs if config.get("Subnet")}
+            if current_subnets and subnet not in current_subnets:
+                raise InstallerError(
+                    f"Docker network `{name}` already exists with unexpected subnet {', '.join(sorted(current_subnets))}."
+                )
         return
-    run(["docker", "network", "create", network_name], stream_output=True)
+
+    command = ["docker", "network", "create", "--driver", "bridge"]
+    if subnet:
+        command.extend(["--subnet", subnet])
+    command.append(name)
+    run(command, stream_output=True)
 
 
 def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:

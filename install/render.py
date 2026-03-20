@@ -21,20 +21,61 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         if context.get("ENABLE_EXTENSIONS", "true").strip().lower() == "true"
         else ""
     )
-    render_context["MTPROXY_STREAM_MAP_BLOCK"] = (
-        f"        {context['MTPROXY_TLS_DOMAIN']} mtproxy_backend;"
-        if mtproxy_enabled(context)
-        else ""
-    )
-    render_context["MTPROXY_STREAM_UPSTREAM_BLOCK"] = (
-        (
+    if mtproxy_enabled(context):
+        render_context["STREAM_ROUTING_BLOCK"] = (
+            "    geo $mtproxy_internal_source {\n"
+            "        default 0;\n"
+            f"        {context.get('MTPROXY_LOOP_MTPROXY_IP', '172.29.100.11')}/32 1;\n"
+            "    }\n\n"
+            '    map "$mtproxy_internal_source:$ssl_preread_server_name" $upstream_backend {\n'
+            f'        0:{context["REALITY_DOMAIN"]} reality_backend;\n'
+            f'        1:{context["REALITY_DOMAIN"]} reality_backend;\n'
+            f'        0:{context["MTPROXY_TLS_DOMAIN"]} mtproxy_backend;\n'
+            f'        1:{context["MTPROXY_TLS_DOMAIN"]} mtproxy_tls_backend;\n'
+            "        default panel_https_backend;\n"
+            "    }\n\n"
+            "    upstream reality_backend {\n"
+            "        server xui:8443;\n"
+            "    }\n\n"
             "    upstream mtproxy_backend {\n"
             f"        server mtproxy:{context.get('MTPROXY_PORT', '3443')};\n"
-            "    }"
+            "    }\n\n"
+            "    upstream mtproxy_tls_backend {\n"
+            f"        server 127.0.0.1:{context.get('MTPROXY_TLS_BACKEND_PORT', '9444')};\n"
+            "    }\n\n"
+            "    upstream panel_https_backend {\n"
+            "        server 127.0.0.1:9443;\n"
+            "    }\n"
         )
-        if mtproxy_enabled(context)
-        else ""
-    )
+        render_context["MTPROXY_FAKE_TLS_SERVER_BLOCK"] = (
+            "\nserver {\n"
+            f"    listen {context.get('MTPROXY_TLS_BACKEND_PORT', '9444')} ssl;\n"
+            "    http2 on;\n"
+            f"    server_name {context['MTPROXY_TLS_DOMAIN']};\n"
+            "    port_in_redirect off;\n\n"
+            f"    ssl_certificate {context['CERT_LIVE_DIR']}/fullchain.pem;\n"
+            f"    ssl_certificate_key {context['CERT_LIVE_DIR']}/privkey.pem;\n\n"
+            "    root /srv/fakesite;\n"
+            "    index index.html;\n\n"
+            "    location / {\n"
+            "        try_files $uri $uri/ /index.html;\n"
+            "    }\n"
+            "}\n"
+        )
+    else:
+        render_context["STREAM_ROUTING_BLOCK"] = (
+            "    map $ssl_preread_server_name $upstream_backend {\n"
+            f"        {context['REALITY_DOMAIN']} reality_backend;\n"
+            "        default panel_https_backend;\n"
+            "    }\n\n"
+            "    upstream reality_backend {\n"
+            "        server xui:8443;\n"
+            "    }\n\n"
+            "    upstream panel_https_backend {\n"
+            "        server 127.0.0.1:9443;\n"
+            "    }\n"
+        )
+        render_context["MTPROXY_FAKE_TLS_SERVER_BLOCK"] = ""
 
     nginx_templates = {
         "nginx.conf.template": paths.SERVICE_NGINX_CONFIG_DIR / "nginx.conf",
