@@ -141,6 +141,8 @@ def apply_overrides(values: dict[str, str], overrides: dict[str, str] | None) ->
     merged = dict(values)
     if overrides:
         merged.update(overrides)
+        if "MTPROXY_TLS_DOMAIN" in overrides and "MTPROXY_PUBLIC_HOST" not in overrides:
+            merged["MTPROXY_PUBLIC_HOST"] = ""
     return sync_derived_fields(merged)
 
 
