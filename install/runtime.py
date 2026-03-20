@@ -119,7 +119,7 @@ def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
     prompted = dict(values)
     print()
     print("+----------------------------------------------------+")
-    print("|  3XUI V2 Initial Setup                             |")
+    print("|  TransiHub v2 Initial Setup                        |")
     print("+----------------------------------------------------+")
     print()
     for key in PROMPTED_FIELDS:

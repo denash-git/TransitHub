@@ -1,1 +1,1 @@
-"""Install package for 3XUI provisioning and project management."""
+"""Install package for TransiHub provisioning and project management."""

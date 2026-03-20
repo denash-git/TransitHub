@@ -40,6 +40,9 @@ PRUNE_RUNTIME_DIRS = [
     PROJECT_ROOT / "xui" / "logs",
 ]
 TOTAL_STEPS = 10
+BLUE = "\033[1;34m"
+GREEN = "\033[1;32m"
+RESET = "\033[0m"
 
 
 class InstallerError(RuntimeError):
@@ -47,7 +50,7 @@ class InstallerError(RuntimeError):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="3XUI V2 installer")
+    parser = argparse.ArgumentParser(description="TransiHub v2 installer")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--non-interactive", action="store_true")
     return parser
@@ -74,7 +77,7 @@ def run_install() -> int:
     args = build_parser().parse_args()
     overrides = parse_key_value(args.set)
 
-    banner("3XUI V2 Installer", "Clean host deploy with local service directories")
+    banner("TransiHub v2 Installer", "Clean host deploy with local service directories")
 
     step(1, "Run preflight checks")
     preflight(overrides)
@@ -589,16 +592,16 @@ def banner(title: str, subtitle: str) -> None:
     lines = [title, subtitle]
     width = max(len(line) for line in lines) + 4
     print("\n" * 2, end="")
-    print("+" + "-" * width + "+")
+    print(f"{BLUE}+" + "-" * width + f"+{RESET}")
     for line in lines:
-        print(f"|  {line.ljust(width - 2)}|")
-    print("+" + "-" * width + "+")
+        print(f"{BLUE}|  {line.ljust(width - 2)}|{RESET}")
+    print(f"{BLUE}+" + "-" * width + f"+{RESET}")
     print()
 
 
 def step(number: int, title: str) -> None:
     print()
-    print(f"[{number:02d}/{TOTAL_STEPS:02d}] {title}")
+    print(f"{GREEN}[{number:02d}/{TOTAL_STEPS:02d}] {title}{RESET}")
 
 
 def note(message: str) -> None:

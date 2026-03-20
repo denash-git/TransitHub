@@ -1,6 +1,6 @@
-# 3XUI V2
+# TransiHub v2
 
-Быстрая установка `3x-ui` на чистую VPS с Debian 12 или Debian 13.
+Быстрая установка proxy platform на чистую VPS с Debian 12 или Debian 13.
 
 ## Быстрый старт
 
@@ -14,8 +14,8 @@
 ```bash
 apt-get update
 apt-get install -y git
-git clone https://github.com/denash-git/3xui ~/3xui
-cd ~/3xui
+git clone https://github.com/denash-git/3xui ~/TransiHub
+cd ~/TransiHub
 bash install.sh
 ```
 
@@ -34,4 +34,4 @@ bash install.sh
 
 ## Полная документация
 
-[docs/README.md](/d:/WORK/3XUI/docs/README.md)
+[docs/README.md](docs/README.md)

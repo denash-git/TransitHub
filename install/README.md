@@ -16,7 +16,7 @@ This directory contains the clean-host entrypoint and host-side artifacts.
 The intended flow on a fresh VPS is:
 
 ```bash
-cd ~/3xui
+cd ~/TransiHub
 bash install.sh
 ```
 

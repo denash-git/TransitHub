@@ -5,7 +5,7 @@ import json
 import sys
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="3XUI V2 instance management")
+    parser = argparse.ArgumentParser(description="TransiHub v2 instance management")
     subparsers = parser.add_subparsers(dest="command", required=True)
     init_parser = subparsers.add_parser("init", help="Create or refresh a local instance state.")
     init_parser.add_argument("--non-interactive", action="store_true")

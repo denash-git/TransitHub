@@ -1,8 +1,8 @@
-# Документация 3XUI V2
+# Документация TransiHub v2
 
 ## Назначение проекта
 
-Этот репозиторий разворачивает `3x-ui` на чистой VPS как одноразовый installer-проект.
+Этот репозиторий разворачивает proxy platform на чистой VPS как одноразовый installer-проект.
 Основная идея такая:
 
 - репозиторий клонируется на свежую VPS
@@ -22,8 +22,8 @@
 ```bash
 apt-get update
 apt-get install -y git
-git clone https://github.com/denash-git/3xui ~/3xui
-cd ~/3xui
+git clone https://github.com/denash-git/3xui ~/TransiHub
+cd ~/TransiHub
 bash install.sh
 ```
 
