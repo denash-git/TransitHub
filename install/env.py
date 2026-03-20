@@ -57,6 +57,7 @@ ENV_FIELDS = [
     EnvField("XUI_IMAGE", "ghcr.io/mhsanaei/3x-ui:latest", True, "Official 3x-ui image."),
     EnvField("NGINX_IMAGE", "nginx:1.27-alpine", True, "Reverse proxy image."),
     EnvField("SUBCONVERTER_IMAGE", "tindy2013/subconverter:latest", True, "Subscription converter image."),
+    EnvField("MTPROXY_IMAGE", "mtproxy:local", True, "Official Telegram MTProxy image built locally."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
     EnvField("ENABLE_MTPROXY", "false", True, "Whether to run official Telegram MTProxy TLS transport."),
@@ -273,10 +274,12 @@ def ensure_unique_port(values: dict[str, str], key: str) -> None:
 def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
     synced = dict(values)
     domain = synced.get("DOMAIN", "").strip()
+    mtproxy_tls_domain = synced.get("MTPROXY_TLS_DOMAIN", "").strip()
+    mtproxy_public_host = synced.get("MTPROXY_PUBLIC_HOST", "").strip()
     if domain:
         synced["CERT_LIVE_DIR"] = f"/etc/letsencrypt/live/{domain}"
-        if not synced.get("MTPROXY_PUBLIC_HOST", "").strip():
-            synced["MTPROXY_PUBLIC_HOST"] = domain
+        if not mtproxy_public_host or (mtproxy_tls_domain and mtproxy_public_host == domain):
+            synced["MTPROXY_PUBLIC_HOST"] = mtproxy_tls_domain or domain
     synced["ENABLE_MTPROXY"] = (
         "true" if synced.get("MTPROXY_TLS_DOMAIN", "").strip() else "false"
     )
