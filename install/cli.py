@@ -8,6 +8,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 from .certbot import CertbotError
@@ -130,7 +131,11 @@ def run_install() -> int:
     note("Create or reuse external Docker network proxy-net")
     ensure_proxy_network()
     note(f"Start {', '.join(enabled_services)} containers")
-    run(compose_up_command(values, *enabled_services))
+    note("First run may take a few minutes while Docker pulls images and builds MTProxy")
+    run(
+        compose_up_command(values, *enabled_services),
+        heartbeat_message="Still working: Docker is preparing core containers",
+    )
     note("Wait for xui service startup")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
@@ -143,7 +148,10 @@ def run_install() -> int:
 
     step(10, "Start full stack and finalize deployment")
     note("Start all runtime services")
-    run(compose_up_command(values, "--force-recreate", "--remove-orphans"))
+    run(
+        compose_up_command(values, "--force-recreate", "--remove-orphans"),
+        heartbeat_message="Still working: Docker is applying the final stack update",
+    )
     note("Wait for nginx, xui, conv, and optional mtproxy services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
@@ -678,7 +686,12 @@ def prune_deployed_tree() -> None:
             gitkeep_file.unlink()
 
 
-def run(command: list[str], cwd: Path | None = None, stream_output: bool = False) -> None:
+def run(
+    command: list[str],
+    cwd: Path | None = None,
+    stream_output: bool = False,
+    heartbeat_message: str | None = None,
+) -> None:
     if stream_output:
         completed = subprocess.run(
             command,
@@ -686,6 +699,42 @@ def run(command: list[str], cwd: Path | None = None, stream_output: bool = False
             check=False,
             text=True,
         )
+    elif heartbeat_message:
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stdout_file, tempfile.TemporaryFile(
+            mode="w+t", encoding="utf-8"
+        ) as stderr_file:
+            process = subprocess.Popen(
+                command,
+                cwd=cwd or PROJECT_ROOT,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+            )
+            next_heartbeat = time.time() + 15
+            while True:
+                returncode = process.poll()
+                if returncode is not None:
+                    break
+                if time.time() >= next_heartbeat:
+                    note(heartbeat_message)
+                    next_heartbeat = time.time() + 15
+                time.sleep(1)
+
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read()
+            stderr = stderr_file.read()
+            completed = subprocess.CompletedProcess(
+                command,
+                returncode,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            if completed.returncode != 0:
+                if completed.stdout:
+                    print(completed.stdout)
+                if completed.stderr:
+                    print(completed.stderr, file=sys.stderr)
     else:
         completed = subprocess.run(
             command,
