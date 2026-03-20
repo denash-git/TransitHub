@@ -263,6 +263,31 @@ Fake-site шаблон выбирается автоматически.
 
 Остальные сервисные порты остаются внутренними в Docker network.
 
+## Автопродление TLS-сертификата
+
+TransitHub теперь настраивает автопродление сертификата через `systemd`:
+
+- `transithub-certbot-renew.service`
+- `transithub-certbot-renew.timer`
+
+Renewal идёт через `certbot renew --standalone`.
+Так как `80/443` заняты контейнером `nginx`, на время ACME-проверки timer:
+
+- временно останавливает контейнер `nginx`
+- выполняет renew
+- запускает `nginx` обратно
+- при обновлении сертификата делает reload конфигурации
+
+Проверить состояние можно так:
+
+```bash
+systemctl status transithub-certbot-renew.timer
+systemctl list-timers --all | grep transithub-certbot-renew
+```
+
+Если делать много подряд fresh-install на одном и том же домене, можно упереться в Let's Encrypt exact-set rate limit.
+Теперь installer сначала пытается переиспользовать уже существующий локальный lineage сертификата. Если локального lineage нет, придётся ждать до времени, которое вернёт Let's Encrypt.
+
 ## Почему не требуется открывать остальные порты
 
 `xui` и `conv` не публикуются напрямую на хост.

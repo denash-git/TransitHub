@@ -10,6 +10,8 @@ import subprocess
 import sys
 import time
 
+from .certbot import CertbotError
+from .certbot import ensure_certificate
 from .mtproxy import enabled as mtproxy_enabled
 from .mtproxy import tg_link as mtproxy_tg_link
 from . import paths
@@ -113,7 +115,7 @@ def run_install() -> int:
     note(f"Resolve main domain {values['DOMAIN']}")
     resolve_domain_or_raise(values["DOMAIN"])
     resolve_mtproxy_tls_domain(values)
-    issue_certificate(str(python), values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
+    issue_certificate(values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
 
     step(8, "Start core containers")
     cleanup_previous_stack()
@@ -381,17 +383,11 @@ def load_instance_env(python: str) -> dict[str, str]:
     return json.loads(completed.stdout)
 
 
-def issue_certificate(python: str, domain: str, email: str) -> None:
-    run(
-        [
-            python,
-            "-c",
-            (
-                "from install.certbot import ensure_certificate; "
-                f"ensure_certificate({domain!r}, {email!r})"
-            ),
-        ]
-    )
+def issue_certificate(domain: str, email: str) -> None:
+    try:
+        ensure_certificate(domain, email)
+    except CertbotError as exc:
+        raise InstallerError(str(exc)) from exc
 
 
 def wait_for_xui_db(timeout_seconds: int = 60) -> None:

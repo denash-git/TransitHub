@@ -36,6 +36,12 @@ UFW_RULES = [
 CERTBOT_VENV_DIR = Path("/opt/certbot")
 CERTBOT_BIN = CERTBOT_VENV_DIR / "bin" / "certbot"
 CERTBOT_SYMLINK = Path("/usr/local/bin/certbot")
+TRANSITHUB_RENEW_SCRIPT = Path("/usr/local/bin/transithub-certbot-renew")
+TRANSITHUB_NGINX_STOP_SCRIPT = Path("/usr/local/bin/transithub-nginx-stop")
+TRANSITHUB_NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
+TRANSITHUB_NGINX_RELOAD_SCRIPT = Path("/usr/local/bin/transithub-nginx-reload")
+TRANSITHUB_RENEW_SERVICE = Path("/etc/systemd/system/transithub-certbot-renew.service")
+TRANSITHUB_RENEW_TIMER = Path("/etc/systemd/system/transithub-certbot-renew.timer")
 DOCKER_DAEMON_DIR = Path("/etc/docker")
 DOCKER_DAEMON_CONFIG = DOCKER_DAEMON_DIR / "daemon.json"
 
@@ -174,6 +180,102 @@ def ensure_certbot() -> None:
     CERTBOT_SYMLINK.symlink_to(CERTBOT_BIN)
 
 
+def write_executable(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def nginx_container_filter_script(command: str) -> str:
+    project_root = str(paths.PROJECT_ROOT)
+    lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        f"project_root={project_root!r}",
+        "mapfile -t containers < <(docker ps -aq \\",
+        "  --filter \"label=com.docker.compose.project.working_dir=${project_root}\" \\",
+        "  --filter \"label=com.docker.compose.service=nginx\")",
+        "if [[ ${#containers[@]} -eq 0 ]]; then",
+        "  exit 0",
+        "fi",
+        "for container in \"${containers[@]}\"; do",
+        f"  {command}",
+        "done",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def ensure_certbot_renewal() -> None:
+    log("Install TransitHub certbot renewal hooks")
+    write_executable(
+        TRANSITHUB_NGINX_STOP_SCRIPT,
+        nginx_container_filter_script("docker stop \"$container\" >/dev/null || true"),
+    )
+    write_executable(
+        TRANSITHUB_NGINX_START_SCRIPT,
+        nginx_container_filter_script("docker start \"$container\" >/dev/null || true"),
+    )
+    write_executable(
+        TRANSITHUB_NGINX_RELOAD_SCRIPT,
+        nginx_container_filter_script(
+            "docker exec \"$container\" nginx -s reload >/dev/null 2>&1 || docker kill --signal=HUP \"$container\" >/dev/null 2>&1 || true"
+        ),
+    )
+    write_executable(
+        TRANSITHUB_RENEW_SCRIPT,
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                "set -euo pipefail",
+                f"certbot_bin={str(CERTBOT_BIN)!r}",
+                f"pre_hook={str(TRANSITHUB_NGINX_STOP_SCRIPT)!r}",
+                f"post_hook={str(TRANSITHUB_NGINX_START_SCRIPT)!r}",
+                f"deploy_hook={str(TRANSITHUB_NGINX_RELOAD_SCRIPT)!r}",
+                "\"$certbot_bin\" renew --quiet --standalone \\",
+                "  --pre-hook \"$pre_hook\" \\",
+                "  --post-hook \"$post_hook\" \\",
+                "  --deploy-hook \"$deploy_hook\"",
+            ]
+        )
+        + "\n",
+    )
+    TRANSITHUB_RENEW_SERVICE.write_text(
+        "\n".join(
+            [
+                "[Unit]",
+                "Description=TransitHub Let's Encrypt renewal",
+                "Wants=network-online.target docker.service",
+                "After=network-online.target docker.service",
+                "",
+                "[Service]",
+                "Type=oneshot",
+                f"ExecStart={TRANSITHUB_RENEW_SCRIPT}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    TRANSITHUB_RENEW_TIMER.write_text(
+        "\n".join(
+            [
+                "[Unit]",
+                "Description=Run TransitHub Let's Encrypt renewal twice daily",
+                "",
+                "[Timer]",
+                "OnCalendar=*-*-* 03,15:00:00",
+                "RandomizedDelaySec=30m",
+                "Persistent=true",
+                "",
+                "[Install]",
+                "WantedBy=timers.target",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    run(["systemctl", "daemon-reload"])
+    run(["systemctl", "enable", "--now", TRANSITHUB_RENEW_TIMER.name])
+
+
 def install_compose_support() -> bool:
     failures: list[tuple[str, str, str]] = []
     for package in APT_COMPOSE_PACKAGES:
@@ -203,6 +305,7 @@ def prepare_host() -> dict[str, object]:
     log("Install base host packages")
     run(["apt-get", "install", "-y", *APT_BASE_PACKAGES])
     ensure_certbot()
+    ensure_certbot_renewal()
 
     docker_installed = command_exists("docker")
     if not docker_installed:
@@ -228,6 +331,7 @@ def prepare_host() -> dict[str, object]:
         "python3": command_exists("python3"),
         "python3_venv": command_works(["python3", "-Im", "ensurepip", "--version"]),
         "certbot": certbot_available(),
+        "certbot_timer": command_works(["systemctl", "is-enabled", TRANSITHUB_RENEW_TIMER.name]),
         "ufw": command_exists("ufw"),
         "ufw_80": ufw_allows("80/tcp"),
         "ufw_443": ufw_allows("443/tcp"),

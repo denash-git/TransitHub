@@ -34,6 +34,7 @@ bash install.sh
 - поднимает Docker и Compose
 - настраивает `ufw`
 - получает TLS-сертификат через `certbot`
+- включает автоматическое продление TLS-сертификата через `systemd timer`
 - генерирует `instance.env`
 - рендерит nginx, клиентскую страницу и fake-site
 - поднимает `xui`, `conv`, `nginx` и опционально `mtproxy`
