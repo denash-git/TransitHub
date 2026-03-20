@@ -116,7 +116,7 @@ def run_install() -> int:
     note("Create or reuse external Docker network proxy-net")
     ensure_proxy_network()
     note(f"Start {', '.join(enabled_services)} containers")
-    run(compose_command(values, "up", "-d", *enabled_services))
+    run(compose_up_command(values, *enabled_services))
     note("Wait for xui service startup")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
@@ -129,7 +129,7 @@ def run_install() -> int:
 
     step(10, "Start full stack and finalize deployment")
     note("Start all runtime services")
-    run(compose_command(values, "up", "-d", "--force-recreate", "--remove-orphans"))
+    run(compose_up_command(values, "--force-recreate", "--remove-orphans"))
     note("Wait for nginx, xui, conv, and optional mtproxy services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
@@ -569,6 +569,10 @@ def compose_command(values: dict[str, str], *arguments: str) -> list[str]:
         command.extend(["-f", str(compose_file)])
     command.extend(arguments)
     return command
+
+
+def compose_up_command(values: dict[str, str], *arguments: str) -> list[str]:
+    return compose_command(values, "up", "-d", "--build", *arguments)
 
 
 def parse_key_value(items: list[str]) -> dict[str, str]:
