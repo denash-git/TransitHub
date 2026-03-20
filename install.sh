@@ -122,7 +122,7 @@ main() {
   spacer 3
 
   install_args=(
-    python3 -m install
+    python3 -m install.cli
     --non-interactive
     --set "INSTANCE_NAME=${instance_name}"
     --set "DOMAIN=${domain}"

@@ -99,13 +99,13 @@ def run_install() -> int:
     run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
 
     step(4, "Create project layout")
-    run([str(python), "-m", "install", "ensure-layout"])
+    run([str(python), "-m", "install.project", "ensure-layout"])
 
     step(5, "Prepare host dependencies and firewall")
-    run([str(python), "-m", "install", "prepare-host"], stream_output=True)
+    run([str(python), "-m", "install.project", "prepare-host"], stream_output=True)
 
     step(6, "Initialize instance settings")
-    init_command = [str(python), "-m", "install", "init"]
+    init_command = [str(python), "-m", "install.project", "init"]
     if args.non_interactive:
         init_command.append("--non-interactive")
     for key, value in overrides.items():
@@ -122,7 +122,7 @@ def run_install() -> int:
     cert_dir = cert_result["cert_dir"]
     if cert_dir and cert_dir != values.get("CERT_LIVE_DIR", ""):
         note(f"Use certificate path {cert_dir}")
-        run([str(python), "-m", "install", "reconfigure", "--set", f"CERT_LIVE_DIR={cert_dir}"])
+        run([str(python), "-m", "install.project", "reconfigure", "--set", f"CERT_LIVE_DIR={cert_dir}"])
         values = load_instance_env(str(python))
         enabled_services = runtime_services(values)
 
@@ -150,7 +150,7 @@ def run_install() -> int:
     wait_for_xui_db()
 
     step(9, "Seed panel settings and inbounds")
-    run([str(python), "-m", "install", "seed-xui-db"])
+    run([str(python), "-m", "install.project", "seed-xui-db"])
 
     step(10, "Start full stack and finalize deployment")
     note("Start all runtime services")
