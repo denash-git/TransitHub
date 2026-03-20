@@ -28,6 +28,7 @@ set -- /opt/mtproxy/mtproto-proxy \
   -p "${MTPROXY_STATS_PORT:-2398}" \
   -H "${MTPROXY_PORT:-3443}" \
   -S "${MTPROXY_SECRET}" \
+  --http-stats \
   --aes-pwd "$PROXY_SECRET_FILE" \
   "$PROXY_CONFIG_FILE" \
   -M "${MTPROXY_WORKERS:-1}"

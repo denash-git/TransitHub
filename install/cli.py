@@ -452,10 +452,12 @@ def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:
         if health is None and status == "running":
             return
         if status == "exited":
-            raise InstallerError(f"Service `{service}` exited during startup.")
+            logs = recent_service_logs(project_name, service)
+            raise InstallerError(f"Service `{service}` exited during startup.\n{logs}")
         time.sleep(2)
 
-    raise TimeoutError(f"Service `{service}` did not become ready in time.")
+    logs = recent_service_logs(project_name, service)
+    raise TimeoutError(f"Service `{service}` did not become ready in time.\n{logs}")
 
 
 def compose_service_container_id(project_name: str, service: str) -> str:
@@ -486,6 +488,30 @@ def inspect_container_state(container_id: str) -> dict[str, object]:
         text=True,
     )
     return json.loads(completed.stdout)
+
+
+def recent_service_logs(project_name: str, service: str, tail: int = 80) -> str:
+    container_id = compose_service_container_id(project_name, service)
+    if not container_id:
+        return f"No container found for service `{service}`."
+
+    completed = subprocess.run(
+        ["docker", "logs", f"--tail={tail}", container_id],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
+    chunks = []
+    if stdout:
+        chunks.append(stdout)
+    if stderr:
+        chunks.append(stderr)
+    if not chunks:
+        return f"No recent logs for service `{service}`."
+    return f"Recent logs for `{service}`:\n" + "\n".join(chunks)
 
 
 def compose_base_command() -> list[str]:
