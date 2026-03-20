@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
+from .certbot import certificate_status
 from .mtproxy import enabled as mtproxy_enabled
 from .mtproxy import tg_link as mtproxy_tg_link
 from .mtproxy import validate as validate_mtproxy
@@ -180,6 +181,7 @@ def reconfigure_instance(overrides: dict[str, str] | None = None) -> dict[str, o
 def status() -> dict[str, object]:
     ensure_layout()
     values = load_instance_env()
+    cert = certificate_status(values.get("DOMAIN", ""))
     return {
         "instance_initialized": values.get("INSTANCE_INITIALIZED", "false"),
         "domain": values.get("DOMAIN", ""),
@@ -191,6 +193,9 @@ def status() -> dict[str, object]:
         "subscription_url": subscription_url(values),
         "web_url": web_url(values),
         "cert_path": values.get("CERT_LIVE_DIR", ""),
+        "certificate_present": cert["present"],
+        "certificate_valid_until": cert["expires_at"],
+        "certificate_days_remaining": cert["days_remaining"],
         "missing_certs": validate_cert_path(values),
         "rendered_nginx_files": sorted(
             str(path) for path in paths.SERVICE_NGINX_CONFIG_DIR.glob("*.conf")

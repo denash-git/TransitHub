@@ -11,6 +11,7 @@ import sys
 import time
 
 from .certbot import CertbotError
+from .certbot import certificate_status
 from .certbot import ensure_certificate
 from .mtproxy import enabled as mtproxy_enabled
 from .mtproxy import tg_link as mtproxy_tg_link
@@ -83,6 +84,7 @@ def run_install() -> int:
     banner("TransitHub v2 Installer", "Clean host deploy with local service directories")
 
     step(1, "Run preflight checks")
+    cleanup_previous_stack(preflight=True)
     preflight(overrides)
 
     step(2, "Prepare Python virtual environment")
@@ -399,7 +401,9 @@ def wait_for_xui_db(timeout_seconds: int = 60) -> None:
     raise TimeoutError(f"x-ui.db was not created in time: {XUI_DB_PATH}")
 
 
-def cleanup_previous_stack() -> None:
+def cleanup_previous_stack(preflight: bool = False) -> None:
+    if shutil.which("docker") is None:
+        return
     completed = subprocess.run(
         [
             "docker",
@@ -415,7 +419,10 @@ def cleanup_previous_stack() -> None:
     )
     container_ids = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
     if container_ids:
-        note("Remove stale containers from previous installer runs")
+        if preflight:
+            note("Remove stale project containers before port checks")
+        else:
+            note("Remove stale containers from previous installer runs")
         run(["docker", "rm", "-f", *container_ids], stream_output=True)
 
 
@@ -609,6 +616,7 @@ def print_summary(values: dict[str, str]) -> None:
     panel_url = f"https://{values['DOMAIN']}/{values['PANEL_PATH']}/"
     sub_url = f"https://{values['DOMAIN']}/{values['SUB_PATH']}/first"
     json_url = f"https://{values['DOMAIN']}/{values['JSON_PATH']}/first"
+    cert = certificate_status(values["DOMAIN"])
     lines = [
         f"Panel URL    : {panel_url}",
         f"Username     : {values['CONFIG_USERNAME']}",
@@ -617,6 +625,15 @@ def print_summary(values: dict[str, str]) -> None:
         f"JSON Sub URL : {json_url}",
         f"Fake site    : {values['FAKE_SITE_TEMPLATE']}",
     ]
+    if cert["present"]:
+        if cert["expires_at"]:
+            lines.append(
+                f"TLS Cert     : {cert['expires_at']} ({cert['days_remaining']} days left)"
+            )
+        else:
+            lines.append("TLS Cert     : present, expiry unknown")
+    else:
+        lines.append("TLS Cert     : not found")
     if mtproxy_enabled(values):
         lines.append(f"MTProxy URL  : {mtproxy_tg_link(values)}")
         lines.append(f"MTProxy SNI  : {values['MTPROXY_TLS_DOMAIN']}")

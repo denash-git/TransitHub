@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+import math
 from pathlib import Path
 import re
 import shutil
@@ -112,6 +115,59 @@ def format_rate_limit_error(domain: str, output: str) -> str:
         "This usually happens after repeated fresh installs on the same domain. "
         "Wait for the rate limit window to expire, or reuse an existing certificate lineage from this host."
     )
+
+
+def certificate_expiry(cert_dir: Path) -> datetime | None:
+    fullchain = cert_dir / "fullchain.pem"
+    if not fullchain.exists():
+        return None
+    completed = subprocess.run(
+        ["openssl", "x509", "-in", str(fullchain), "-noout", "-enddate"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    line = completed.stdout.strip()
+    if not line.startswith("notAfter="):
+        return None
+    value = line.split("=", 1)[1].strip()
+    try:
+        expires_at = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at.astimezone(timezone.utc)
+
+
+def certificate_status(domain: str) -> dict[str, object]:
+    cert_dir = best_existing_certificate_dir(domain)
+    if cert_dir is None or not cert_files_exist(cert_dir):
+        return {
+            "present": False,
+            "domain": domain,
+            "cert_dir": "",
+            "expires_at": "",
+            "days_remaining": None,
+        }
+
+    expires_at = certificate_expiry(cert_dir)
+    days_remaining: int | None = None
+    expires_at_str = ""
+    if expires_at is not None:
+        remaining = max(0.0, (expires_at - datetime.now(timezone.utc)).total_seconds())
+        days_remaining = math.ceil(remaining / 86400) if remaining else 0
+        expires_at_str = expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    return {
+        "present": True,
+        "domain": domain,
+        "cert_dir": str(cert_dir),
+        "expires_at": expires_at_str,
+        "days_remaining": days_remaining,
+    }
 
 
 def ensure_certificate(domain: str, email: str = "") -> dict[str, object]:
