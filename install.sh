@@ -95,8 +95,13 @@ main() {
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
   printf '\n' > /dev/tty
-  printf '%b%s%b [disabled]: ' "$BOLD" 'MTProxy TLS domain' "$RESET" > /dev/tty
+  printf '%b%s%b [tg.%s]: ' "$BOLD" 'MTProxy TLS domain' "$RESET" "$domain" > /dev/tty
   IFS= read -r mtproxy_tls_domain < /dev/tty
+  if [[ -z "$mtproxy_tls_domain" ]]; then
+    mtproxy_tls_domain="tg.${domain}"
+  elif [[ "$mtproxy_tls_domain" == "-" ]]; then
+    mtproxy_tls_domain=""
+  fi
   printf '\n' > /dev/tty
   tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"

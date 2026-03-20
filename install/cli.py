@@ -449,6 +449,8 @@ def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:
         health = (state.get("Health") or {}).get("Status")
         if health == "healthy":
             return
+        if service == "mtproxy" and status == "running":
+            return
         if health is None and status == "running":
             return
         if status == "exited":
