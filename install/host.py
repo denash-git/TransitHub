@@ -36,6 +36,8 @@ UFW_RULES = [
 CERTBOT_VENV_DIR = Path("/opt/certbot")
 CERTBOT_BIN = CERTBOT_VENV_DIR / "bin" / "certbot"
 CERTBOT_SYMLINK = Path("/usr/local/bin/certbot")
+DOCKER_DAEMON_DIR = Path("/etc/docker")
+DOCKER_DAEMON_CONFIG = DOCKER_DAEMON_DIR / "daemon.json"
 
 
 def log(message: str) -> None:
@@ -85,6 +87,11 @@ def ensure_docker_service() -> None:
     run(["systemctl", "enable", "--now", "docker"])
 
 
+def restart_docker_service() -> None:
+    log("Restart docker service to apply daemon settings")
+    run(["systemctl", "restart", "docker"])
+
+
 def ufw_allows(port: str) -> bool:
     result = subprocess.run(["ufw", "status"], capture_output=True, text=True, check=True)
     return port in result.stdout
@@ -92,6 +99,60 @@ def ufw_allows(port: str) -> bool:
 
 def docker_compose_available() -> bool:
     return command_works(["docker", "compose", "version"]) or command_works(["docker-compose", "version"])
+
+
+def read_json_file(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {path}: {exc}") from exc
+    if not isinstance(loaded, dict):
+        raise ValueError(f"{path} must contain a JSON object.")
+    return loaded
+
+
+def collect_system_dns_servers() -> list[str]:
+    candidates = [
+        Path("/run/systemd/resolve/resolv.conf"),
+        Path("/etc/resolv.conf"),
+    ]
+    servers: list[str] = []
+    seen: set[str] = set()
+
+    for path in candidates:
+        if not path.exists():
+            continue
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line.startswith("nameserver "):
+                continue
+            server = line.split(None, 1)[1].strip()
+            if not server or server.startswith("127.") or server == "::1":
+                continue
+            if server not in seen:
+                seen.add(server)
+                servers.append(server)
+    return servers
+
+
+def ensure_docker_dns_config() -> bool:
+    servers = collect_system_dns_servers()
+    if not servers:
+        log("Skip explicit Docker DNS setup: no upstream resolvers found")
+        return False
+
+    DOCKER_DAEMON_DIR.mkdir(parents=True, exist_ok=True)
+    config = read_json_file(DOCKER_DAEMON_CONFIG)
+    current_dns = config.get("dns")
+    if current_dns == servers:
+        return False
+
+    config["dns"] = servers
+    DOCKER_DAEMON_CONFIG.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    log(f"Configure Docker daemon DNS: {', '.join(servers)}")
+    return True
 
 
 def certbot_available() -> bool:
@@ -150,12 +211,16 @@ def prepare_host() -> dict[str, object]:
         docker_installed = command_exists("docker")
 
     compose_installed = False
+    docker_dns_changed = False
     if docker_installed:
+        docker_dns_changed = ensure_docker_dns_config()
         compose_installed = docker_compose_available()
         if not compose_installed:
             log("Install Docker Compose support")
             compose_installed = install_compose_support()
         ensure_docker_service()
+        if docker_dns_changed:
+            restart_docker_service()
 
     ensure_ufw_rules()
 
@@ -169,6 +234,7 @@ def prepare_host() -> dict[str, object]:
         "ufw_22": ufw_allows("22/tcp"),
         "docker": docker_installed,
         "docker_compose": compose_installed,
+        "docker_dns_configured": bool(docker_installed),
     }
     paths.HOST_PREPARE_STATUS_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result
