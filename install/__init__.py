@@ -1,1 +1,1 @@
-"""Install package for TransiHub provisioning and project management."""
+"""Install package for TransitHub provisioning and project management."""

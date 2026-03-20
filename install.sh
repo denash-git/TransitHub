@@ -90,7 +90,7 @@ detect_tz() {
 main() {
   local tz domain reality_domain mtproxy_tls_domain fake_site instance_name mtproxy_state
 
-  frame 'TransiHub v2 Install Menu' 'Fresh host deployment for proxy platform'
+  frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
   instance_name="$(hostname -s)"
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"

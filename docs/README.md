@@ -1,4 +1,4 @@
-# Документация TransiHub v2
+# Документация TransitHub v2
 
 ## Назначение проекта
 
@@ -22,8 +22,8 @@
 ```bash
 apt-get update
 apt-get install -y git
-git clone https://github.com/denash-git/3xui ~/TransiHub
-cd ~/TransiHub
+git clone https://github.com/denash-git/TransitHub.git ~/TransitHub
+cd ~/TransitHub
 bash install.sh
 ```
 

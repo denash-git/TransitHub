@@ -1,4 +1,4 @@
-# TransiHub v2
+# TransitHub v2
 
 Быстрая установка proxy platform на чистую VPS с Debian 12 или Debian 13.
 
@@ -14,8 +14,8 @@
 ```bash
 apt-get update
 apt-get install -y git
-git clone https://github.com/denash-git/3xui ~/TransiHub
-cd ~/TransiHub
+git clone https://github.com/denash-git/TransitHub.git ~/TransitHub
+cd ~/TransitHub
 bash install.sh
 ```
 

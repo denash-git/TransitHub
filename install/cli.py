@@ -50,7 +50,7 @@ class InstallerError(RuntimeError):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="TransiHub v2 installer")
+    parser = argparse.ArgumentParser(description="TransitHub v2 installer")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--non-interactive", action="store_true")
     return parser
@@ -77,7 +77,7 @@ def run_install() -> int:
     args = build_parser().parse_args()
     overrides = parse_key_value(args.set)
 
-    banner("TransiHub v2 Installer", "Clean host deploy with local service directories")
+    banner("TransitHub v2 Installer", "Clean host deploy with local service directories")
 
     step(1, "Run preflight checks")
     preflight(overrides)
