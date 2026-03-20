@@ -2,9 +2,9 @@
 set -euo pipefail
 
 REPO_URL="${TRANSITHUB_REPO_URL:-https://github.com/denash-git/TransitHub.git}"
-RAW_BOOTSTRAP_URL="${TRANSITHUB_BOOTSTRAP_URL:-https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh}"
 INSTALL_DIR="${TRANSITHUB_INSTALL_DIR:-/root/TransitHub}"
 BRANCH="${TRANSITHUB_BRANCH:-main}"
+RAW_BOOTSTRAP_URL="${TRANSITHUB_BOOTSTRAP_URL:-https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh}"
 
 rerun_with_sudo() {
   if ! command -v sudo >/dev/null 2>&1; then
