@@ -4,6 +4,14 @@
 
 ## Быстрый старт
 
+Одной строкой:
+
+```bash
+sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
+Или обычным clone-сценарием:
+
 Можно запускать:
 
 - от `root`

@@ -20,6 +20,7 @@ REQUIREMENTS_PATH = PROJECT_ROOT / "requirements.txt"
 XUI_DB_PATH = PROJECT_ROOT / "xui" / "data" / "x-ui.db"
 PRUNE_TOP_LEVEL = [
     VENV_DIR,
+    PROJECT_ROOT / "bootstrap.sh",
     PROJECT_ROOT / "docs",
     PROJECT_ROOT / "install",
     PROJECT_ROOT / "templates",

@@ -17,6 +17,21 @@
 
 ## Быстрая установка
 
+Однострочный bootstrap:
+
+```bash
+sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
+Что он делает:
+
+- при необходимости поднимает `sudo`
+- ставит `git`, если его ещё нет
+- клонирует `TransitHub` в `/root/TransitHub`
+- запускает `bash install.sh`
+
+Альтернативно можно использовать обычный clone-сценарий.
+
 Рабочий минимальный сценарий:
 
 ```bash
