@@ -1,7 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 import subprocess
+
+
+def certbot_executable() -> str:
+    managed = Path("/opt/certbot/bin/certbot")
+    if managed.exists():
+        return str(managed)
+    resolved = shutil.which("certbot")
+    if resolved:
+        return resolved
+    raise FileNotFoundError("certbot executable was not found.")
 
 
 def ensure_certificate(domain: str, email: str = "") -> dict[str, object]:
@@ -16,7 +27,7 @@ def ensure_certificate(domain: str, email: str = "") -> dict[str, object]:
         }
 
     command = [
-        "certbot",
+        certbot_executable(),
         "certonly",
         "--standalone",
         "--non-interactive",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import shutil
 import subprocess
 
@@ -16,7 +17,6 @@ APT_BASE_PACKAGES = [
     "python3",
     "python3-venv",
     "python3-pip",
-    "certbot",
     "ufw",
 ]
 APT_DOCKER_PACKAGES = [
@@ -32,6 +32,10 @@ UFW_RULES = [
     ["ufw", "allow", "443/tcp"],
     ["ufw", "allow", "22/tcp"],
 ]
+
+CERTBOT_VENV_DIR = Path("/opt/certbot")
+CERTBOT_BIN = CERTBOT_VENV_DIR / "bin" / "certbot"
+CERTBOT_SYMLINK = Path("/usr/local/bin/certbot")
 
 
 def log(message: str) -> None:
@@ -90,6 +94,25 @@ def docker_compose_available() -> bool:
     return command_works(["docker", "compose", "version"]) or command_works(["docker-compose", "version"])
 
 
+def certbot_available() -> bool:
+    return CERTBOT_BIN.exists() and command_works([str(CERTBOT_BIN), "--version"])
+
+
+def ensure_certbot() -> None:
+    if not certbot_available():
+        log("Install official Certbot in /opt/certbot")
+        if CERTBOT_VENV_DIR.exists():
+            shutil.rmtree(CERTBOT_VENV_DIR, ignore_errors=True)
+        run(["python3", "-m", "venv", str(CERTBOT_VENV_DIR)])
+        run([str(CERTBOT_VENV_DIR / "bin" / "pip"), "install", "--upgrade", "pip"])
+        run([str(CERTBOT_VENV_DIR / "bin" / "pip"), "install", "certbot"])
+
+    log("Ensure certbot command is available at /usr/local/bin/certbot")
+    if CERTBOT_SYMLINK.exists() or CERTBOT_SYMLINK.is_symlink():
+        CERTBOT_SYMLINK.unlink()
+    CERTBOT_SYMLINK.symlink_to(CERTBOT_BIN)
+
+
 def install_compose_support() -> bool:
     failures: list[tuple[str, str, str]] = []
     for package in APT_COMPOSE_PACKAGES:
@@ -118,6 +141,7 @@ def prepare_host() -> dict[str, object]:
 
     log("Install base host packages")
     run(["apt-get", "install", "-y", *APT_BASE_PACKAGES])
+    ensure_certbot()
 
     docker_installed = command_exists("docker")
     if not docker_installed:
@@ -138,7 +162,7 @@ def prepare_host() -> dict[str, object]:
     result = {
         "python3": command_exists("python3"),
         "python3_venv": command_works(["python3", "-Im", "ensurepip", "--version"]),
-        "certbot": command_exists("certbot"),
+        "certbot": certbot_available(),
         "ufw": command_exists("ufw"),
         "ufw_80": ufw_allows("80/tcp"),
         "ufw_443": ufw_allows("443/tcp"),

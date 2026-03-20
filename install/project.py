@@ -84,7 +84,7 @@ def main() -> int:
         if args.command == "prepare-host":
             from .host import prepare_host
 
-            print(json.dumps(prepare_host(), indent=2))
+            prepare_host()
             return 0
 
         if args.command == "sync-xui-db":
