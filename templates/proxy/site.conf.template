@@ -10,8 +10,8 @@ server {
     server_name ${DOMAIN};
     port_in_redirect off;
 
-    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_certificate ${CERT_LIVE_DIR}/fullchain.pem;
+    ssl_certificate_key ${CERT_LIVE_DIR}/privkey.pem;
 
     root /srv/fakesite;
     index index.html;

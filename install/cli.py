@@ -117,7 +117,13 @@ def run_install() -> int:
     note(f"Resolve main domain {values['DOMAIN']}")
     resolve_domain_or_raise(values["DOMAIN"])
     resolve_mtproxy_tls_domain(values)
-    issue_certificate(values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
+    cert_result = issue_certificate(values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
+    cert_dir = cert_result["cert_dir"]
+    if cert_dir and cert_dir != values.get("CERT_LIVE_DIR", ""):
+        note(f"Use certificate path {cert_dir}")
+        run([str(python), "-m", "install", "reconfigure", "--set", f"CERT_LIVE_DIR={cert_dir}"])
+        values = load_instance_env(str(python))
+        enabled_services = runtime_services(values)
 
     step(8, "Start core containers")
     cleanup_previous_stack()
@@ -385,9 +391,11 @@ def load_instance_env(python: str) -> dict[str, str]:
     return json.loads(completed.stdout)
 
 
-def issue_certificate(domain: str, email: str) -> None:
+def issue_certificate(domain: str, email: str) -> dict[str, object]:
+    values = load_instance_env(str(venv_python()))
+    staging = values.get("CERTBOT_STAGING", "false").strip().lower() == "true"
     try:
-        ensure_certificate(domain, email)
+        return ensure_certificate(domain, email, staging=staging)
     except CertbotError as exc:
         raise InstallerError(str(exc)) from exc
 
@@ -616,7 +624,8 @@ def print_summary(values: dict[str, str]) -> None:
     panel_url = f"https://{values['DOMAIN']}/{values['PANEL_PATH']}/"
     sub_url = f"https://{values['DOMAIN']}/{values['SUB_PATH']}/first"
     json_url = f"https://{values['DOMAIN']}/{values['JSON_PATH']}/first"
-    cert = certificate_status(values["DOMAIN"])
+    staging = values.get("CERTBOT_STAGING", "false").strip().lower() == "true"
+    cert = certificate_status(values["DOMAIN"], staging=staging)
     lines = [
         f"Panel URL    : {panel_url}",
         f"Username     : {values['CONFIG_USERNAME']}",
@@ -634,6 +643,8 @@ def print_summary(values: dict[str, str]) -> None:
             lines.append("TLS Cert     : present, expiry unknown")
     else:
         lines.append("TLS Cert     : not found")
+    if staging:
+        lines.append("TLS Mode     : Let's Encrypt staging")
     if mtproxy_enabled(values):
         lines.append(f"MTProxy URL  : {mtproxy_tg_link(values)}")
         lines.append(f"MTProxy SNI  : {values['MTPROXY_TLS_DOMAIN']}")

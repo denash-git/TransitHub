@@ -10,7 +10,9 @@ import subprocess
 
 
 LETSENCRYPT_LIVE_DIR = Path("/etc/letsencrypt/live")
+LETSENCRYPT_RENEWAL_DIR = Path("/etc/letsencrypt/renewal")
 DNS_NAME_PATTERN = re.compile(r"DNS:([^,\s]+)")
+STAGING_SERVER_FRAGMENT = "acme-staging-v02.api.letsencrypt.org"
 
 
 class CertbotError(RuntimeError):
@@ -35,6 +37,22 @@ def cert_files_exist(cert_dir: Path) -> bool:
     return (cert_dir / "fullchain.pem").exists() and (cert_dir / "privkey.pem").exists()
 
 
+def cert_name_for(domain: str, staging: bool = False) -> str:
+    return f"{domain}-staging" if staging else domain
+
+
+def renewal_config_path(cert_name: str) -> Path:
+    return LETSENCRYPT_RENEWAL_DIR / f"{cert_name}.conf"
+
+
+def renewal_is_staging(cert_dir: Path) -> bool | None:
+    config_path = renewal_config_path(cert_dir.name)
+    if not config_path.exists():
+        return None
+    contents = config_path.read_text(encoding="utf-8", errors="ignore")
+    return STAGING_SERVER_FRAGMENT in contents
+
+
 def certificate_domains(cert_dir: Path) -> set[str]:
     fullchain = cert_dir / "fullchain.pem"
     if not fullchain.exists():
@@ -50,12 +68,12 @@ def certificate_domains(cert_dir: Path) -> set[str]:
     return {match.group(1) for match in DNS_NAME_PATTERN.finditer(completed.stdout)}
 
 
-def candidate_certificate_dirs(domain: str) -> list[Path]:
+def candidate_certificate_dirs(domain: str, staging: bool = False) -> list[Path]:
     if not LETSENCRYPT_LIVE_DIR.exists():
         return []
 
     candidates: list[Path] = []
-    exact = LETSENCRYPT_LIVE_DIR / domain
+    exact = LETSENCRYPT_LIVE_DIR / cert_name_for(domain, staging)
     if cert_files_exist(exact):
         candidates.append(exact)
 
@@ -64,40 +82,25 @@ def candidate_certificate_dirs(domain: str) -> list[Path]:
             continue
         if not cert_files_exist(cert_dir):
             continue
+        cert_staging = renewal_is_staging(cert_dir)
+        if cert_staging is not None and cert_staging != staging:
+            continue
         if domain in certificate_domains(cert_dir):
             candidates.append(cert_dir)
     return candidates
 
 
-def best_existing_certificate_dir(domain: str) -> Path | None:
-    candidates = candidate_certificate_dirs(domain)
+def best_existing_certificate_dir(domain: str, staging: bool = False) -> Path | None:
+    candidates = candidate_certificate_dirs(domain, staging)
     if not candidates:
         return None
-    if candidates[0].name == domain:
+    if candidates[0].name == cert_name_for(domain, staging):
         return candidates[0]
     return max(candidates, key=lambda path: (path / "fullchain.pem").stat().st_mtime)
 
 
-def ensure_live_alias(domain: str, cert_dir: Path) -> Path:
-    alias_dir = LETSENCRYPT_LIVE_DIR / domain
-    if cert_dir == alias_dir:
-        return cert_dir
-    if alias_dir.exists() or alias_dir.is_symlink():
-        if cert_files_exist(alias_dir):
-            return alias_dir
-        if alias_dir.is_symlink() or alias_dir.is_file():
-            alias_dir.unlink()
-        else:
-            shutil.rmtree(alias_dir, ignore_errors=True)
-    alias_dir.symlink_to(cert_dir, target_is_directory=True)
-    return alias_dir
-
-
-def normalize_cert_dir(domain: str) -> Path | None:
-    cert_dir = best_existing_certificate_dir(domain)
-    if cert_dir is None:
-        return None
-    return ensure_live_alias(domain, cert_dir)
+def normalize_cert_dir(domain: str, staging: bool = False) -> Path | None:
+    return best_existing_certificate_dir(domain, staging)
 
 
 def extract_retry_after(output: str) -> str | None:
@@ -142,13 +145,14 @@ def certificate_expiry(cert_dir: Path) -> datetime | None:
     return expires_at.astimezone(timezone.utc)
 
 
-def certificate_status(domain: str) -> dict[str, object]:
-    cert_dir = best_existing_certificate_dir(domain)
+def certificate_status(domain: str, staging: bool = False) -> dict[str, object]:
+    cert_dir = best_existing_certificate_dir(domain, staging)
     if cert_dir is None or not cert_files_exist(cert_dir):
         return {
             "present": False,
             "domain": domain,
             "cert_dir": "",
+            "staging": staging,
             "expires_at": "",
             "days_remaining": None,
         }
@@ -165,17 +169,20 @@ def certificate_status(domain: str) -> dict[str, object]:
         "present": True,
         "domain": domain,
         "cert_dir": str(cert_dir),
+        "staging": staging,
         "expires_at": expires_at_str,
         "days_remaining": days_remaining,
     }
 
 
-def ensure_certificate(domain: str, email: str = "") -> dict[str, object]:
-    existing = normalize_cert_dir(domain)
+def ensure_certificate(domain: str, email: str = "", staging: bool = False) -> dict[str, object]:
+    cert_name = cert_name_for(domain, staging)
+    existing = normalize_cert_dir(domain, staging)
     if existing and cert_files_exist(existing):
         return {
             "domain": domain,
             "cert_dir": str(existing),
+            "staging": staging,
             "changed": False,
         }
 
@@ -185,9 +192,13 @@ def ensure_certificate(domain: str, email: str = "") -> dict[str, object]:
         "--standalone",
         "--non-interactive",
         "--agree-tos",
+        "--cert-name",
+        cert_name,
         "-d",
         domain,
     ]
+    if staging:
+        command.append("--staging")
     if email.strip():
         command.extend(["-m", email.strip()])
     else:
@@ -196,20 +207,22 @@ def ensure_certificate(domain: str, email: str = "") -> dict[str, object]:
     completed = subprocess.run(command, check=False, capture_output=True, text=True)
     if completed.returncode != 0:
         output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
-        existing = normalize_cert_dir(domain)
+        existing = normalize_cert_dir(domain, staging)
         if existing and cert_files_exist(existing):
             return {
                 "domain": domain,
                 "cert_dir": str(existing),
+                "staging": staging,
                 "changed": False,
             }
         if "too many certificates" in output.lower():
             raise CertbotRateLimitError(format_rate_limit_error(domain, output))
         raise CertbotError(output or f"certbot failed for `{domain}` with exit code {completed.returncode}.")
 
-    cert_dir = normalize_cert_dir(domain) or (LETSENCRYPT_LIVE_DIR / domain)
+    cert_dir = normalize_cert_dir(domain, staging) or (LETSENCRYPT_LIVE_DIR / cert_name)
     return {
         "domain": domain,
         "cert_dir": str(cert_dir),
+        "staging": staging,
         "changed": True,
     }

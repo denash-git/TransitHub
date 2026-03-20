@@ -10,6 +10,12 @@
 sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
 ```
 
+Тестовый прогон без production rate limit Let's Encrypt:
+
+```bash
+CERTBOT_STAGING=true sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
 Или обычным clone-сценарием:
 
 Можно запускать:
@@ -35,6 +41,7 @@ bash install.sh
 - настраивает `ufw`
 - получает TLS-сертификат через `certbot`
 - включает автоматическое продление TLS-сертификата через `systemd timer`
+- поддерживает `CERTBOT_STAGING=true` для безопасных тестовых прогонов
 - генерирует `instance.env`
 - рендерит nginx, клиентскую страницу и fake-site
 - поднимает `xui`, `conv`, `nginx` и опционально `mtproxy`

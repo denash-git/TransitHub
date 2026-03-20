@@ -23,6 +23,12 @@
 sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
 ```
 
+Тестовый staging-прогон без production rate limit:
+
+```bash
+CERTBOT_STAGING=true sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
 Что он делает:
 
 - при необходимости поднимает `sudo`
@@ -31,6 +37,33 @@ sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/ma
 - запускает `bash install.sh`
 
 Альтернативно можно использовать обычный clone-сценарий.
+
+## Staging и production сертификаты
+
+TransitHub поддерживает два режима выпуска Let's Encrypt:
+
+- production
+  normal trusted сертификат для реальной работы
+- staging
+  тестовый сертификат для отладки installer flow без production rate limit
+
+Включение staging:
+
+```bash
+CERTBOT_STAGING=true bash install.sh
+```
+
+или:
+
+```bash
+CERTBOT_STAGING=true sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
+Важно:
+
+- staging-сертификат не доверяется браузерами
+- staging нужен для тестов, а не для боевого deploy
+- staging и production теперь хранятся как разные certbot lineages и не смешиваются между собой
 
 Рабочий минимальный сценарий:
 

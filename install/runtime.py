@@ -181,11 +181,13 @@ def reconfigure_instance(overrides: dict[str, str] | None = None) -> dict[str, o
 def status() -> dict[str, object]:
     ensure_layout()
     values = load_instance_env()
-    cert = certificate_status(values.get("DOMAIN", ""))
+    staging = values.get("CERTBOT_STAGING", "false").strip().lower() == "true"
+    cert = certificate_status(values.get("DOMAIN", ""), staging=staging)
     return {
         "instance_initialized": values.get("INSTANCE_INITIALIZED", "false"),
         "domain": values.get("DOMAIN", ""),
         "reality_domain": values.get("REALITY_DOMAIN", ""),
+        "certbot_staging": staging,
         "mtproxy_enabled": mtproxy_enabled(values),
         "mtproxy_tls_domain": values.get("MTPROXY_TLS_DOMAIN", ""),
         "mtproxy_link": mtproxy_tg_link(values),

@@ -12,6 +12,7 @@ import uuid
 
 from .mtproxy import base_secret as generate_mtproxy_secret
 from .mtproxy import client_secret as build_mtproxy_client_secret
+from .certbot import cert_name_for
 
 
 def utc_timestamp() -> str:
@@ -70,6 +71,7 @@ ENV_FIELDS = [
     EnvField("MTPROXY_TAG", "", True, "Optional MTProxyBot advertising tag."),
     EnvField("MTPROXY_WORKERS", "1", True, "MTProxy worker count; keep 1 for TLS transport."),
     EnvField("CERTBOT_EMAIL", "", True, "Optional Let's Encrypt registration email."),
+    EnvField("CERTBOT_STAGING", "false", True, "Use Let's Encrypt staging instead of production."),
     EnvField("CERT_LIVE_DIR", "/etc/letsencrypt/live/example.com", True, "Host certificate directory mounted into runtime."),
     EnvField("BOOTSTRAP_VERSION", "0.2.0", True, "Installer schema version."),
     EnvField("XUI_DB_SCHEMA_VERSION", "latest-official", True, "Pinned x-ui schema marker."),
@@ -276,8 +278,17 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
     domain = synced.get("DOMAIN", "").strip()
     mtproxy_tls_domain = synced.get("MTPROXY_TLS_DOMAIN", "").strip()
     mtproxy_public_host = synced.get("MTPROXY_PUBLIC_HOST", "").strip()
+    staging = synced.get("CERTBOT_STAGING", "false").strip().lower() == "true"
     if domain:
-        synced["CERT_LIVE_DIR"] = f"/etc/letsencrypt/live/{domain}"
+        desired_cert_dir = f"/etc/letsencrypt/live/{cert_name_for(domain, staging)}"
+        current_cert_dir = synced.get("CERT_LIVE_DIR", "").strip()
+        if current_cert_dir in {
+            "",
+            "/etc/letsencrypt/live/example.com",
+            f"/etc/letsencrypt/live/{domain}",
+            desired_cert_dir,
+        }:
+            synced["CERT_LIVE_DIR"] = desired_cert_dir
         if not mtproxy_public_host or (mtproxy_tls_domain and mtproxy_public_host == domain):
             synced["MTPROXY_PUBLIC_HOST"] = mtproxy_tls_domain or domain
     synced["ENABLE_MTPROXY"] = (

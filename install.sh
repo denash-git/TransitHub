@@ -89,6 +89,7 @@ detect_tz() {
 
 main() {
   local tz domain reality_domain mtproxy_tls_domain fake_site instance_name mtproxy_state
+  local -a install_args
 
   frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
   instance_name="$(hostname -s)"
@@ -120,14 +121,22 @@ main() {
   printf '  fake site : %s\n' "$fake_site"
   spacer 3
 
-  python3 -m install \
-    --non-interactive \
-    --set "INSTANCE_NAME=${instance_name}" \
-    --set "DOMAIN=${domain}" \
-    --set "REALITY_DOMAIN=${reality_domain}" \
-    --set "MTPROXY_TLS_DOMAIN=${mtproxy_tls_domain}" \
-    --set "TZ=${tz}" \
+  install_args=(
+    python3 -m install
+    --non-interactive
+    --set "INSTANCE_NAME=${instance_name}"
+    --set "DOMAIN=${domain}"
+    --set "REALITY_DOMAIN=${reality_domain}"
+    --set "MTPROXY_TLS_DOMAIN=${mtproxy_tls_domain}"
+    --set "TZ=${tz}"
     --set "FAKE_SITE_TEMPLATE=${fake_site}"
+  )
+
+  if [[ -n "${CERTBOT_STAGING:-}" ]]; then
+    install_args+=(--set "CERTBOT_STAGING=${CERTBOT_STAGING}")
+  fi
+
+  "${install_args[@]}"
 }
 
 main "$@"
