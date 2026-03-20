@@ -20,7 +20,7 @@ REQUIRED_FILES = [
     PROJECT_ROOT / "nginx" / "docker-compose.yml",
     PROJECT_ROOT / "xui" / "docker-compose.yml",
     PROJECT_ROOT / "subconverter" / "docker-compose.yml",
-    PROJECT_ROOT / "tgproxy" / "docker-compose.yml",
+    PROJECT_ROOT / "mtproxy" / "docker-compose.yml",
     PROJECT_ROOT / "instance.env",
 ]
 

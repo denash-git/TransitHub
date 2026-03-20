@@ -14,8 +14,8 @@ import time
 from .certbot import CertbotError
 from .certbot import certificate_status
 from .certbot import ensure_certificate
-from .tgproxy import enabled as tgproxy_enabled
-from .tgproxy import tg_link as tgproxy_tg_link
+from .mtproxy import enabled as mtproxy_enabled
+from .mtproxy import tg_link as mtproxy_tg_link
 from . import paths
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -117,7 +117,7 @@ def run_install() -> int:
     step(7, "Issue or reuse TLS certificate")
     note(f"Resolve main domain {values['DOMAIN']}")
     resolve_domain_or_raise(values["DOMAIN"])
-    resolve_tgproxy_domains(values)
+    resolve_mtproxy_tls_domain(values)
     cert_result = issue_certificate(values)
     cert_dir = cert_result["cert_dir"]
     if cert_dir and cert_dir != values.get("CERT_LIVE_DIR", ""):
@@ -128,10 +128,16 @@ def run_install() -> int:
 
     step(8, "Start core containers")
     cleanup_previous_stack()
-    note("Create or reuse external Docker network proxy-net")
+    if mtproxy_enabled(values):
+        note(
+            "Create or reuse external Docker networks "
+            f"proxy-net and {values.get('MTPROXY_LOOP_NETWORK', 'mtproxy-loop-net')}"
+        )
+    else:
+        note("Create or reuse external Docker network proxy-net")
     ensure_runtime_networks(values)
     note(f"Start {', '.join(enabled_services)} containers")
-    note("First run may take a few minutes while Docker pulls images")
+    note("First run may take a few minutes while Docker pulls images and builds MTProxy")
     run(
         compose_up_command(values, *enabled_services),
         heartbeat_message="Still working: Docker is preparing core containers",
@@ -139,8 +145,8 @@ def run_install() -> int:
     note("Wait for xui service startup")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
-    if tgproxy_enabled(values):
-        wait_for_service_ready("tgproxy")
+    if mtproxy_enabled(values):
+        wait_for_service_ready("mtproxy")
     wait_for_xui_db()
 
     step(9, "Seed panel settings and inbounds")
@@ -152,12 +158,12 @@ def run_install() -> int:
         compose_up_command(values, "--force-recreate", "--remove-orphans"),
         heartbeat_message="Still working: Docker is applying the final stack update",
     )
-    note("Wait for nginx, xui, conv, and optional Telegram proxy services")
+    note("Wait for nginx, xui, conv, and optional mtproxy services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
-    if tgproxy_enabled(values):
-        wait_for_service_ready("tgproxy")
+    if mtproxy_enabled(values):
+        wait_for_service_ready("mtproxy")
     note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
     prune_deployed_tree()
@@ -178,12 +184,9 @@ def preflight(overrides: dict[str, str]) -> None:
     domain = overrides.get("DOMAIN", "").strip()
     if domain and domain != "example.com":
         resolve_domain_or_raise(domain)
-    tgproxy_public_host = overrides.get("TGPROXY_PUBLIC_HOST", "").strip()
-    if tgproxy_public_host:
-        resolve_domain_or_raise(tgproxy_public_host, "Telegram proxy host")
-    tgproxy_faketls_domain = overrides.get("TGPROXY_FAKETLS_DOMAIN", "").strip()
-    if tgproxy_faketls_domain:
-        resolve_domain_or_raise(tgproxy_faketls_domain, "Telegram FakeTLS domain")
+    mtproxy_tls_domain = overrides.get("MTPROXY_TLS_DOMAIN", "").strip()
+    if mtproxy_tls_domain:
+        resolve_domain_or_raise(mtproxy_tls_domain)
 
 
 def require_root() -> None:
@@ -285,11 +288,10 @@ def resolve_domain_or_raise(domain: str, label: str = "Main domain") -> None:
         ) from exc
 
 
-def resolve_tgproxy_domains(values: dict[str, str]) -> None:
-    if not tgproxy_enabled(values):
+def resolve_mtproxy_tls_domain(values: dict[str, str]) -> None:
+    if not mtproxy_enabled(values):
         return
-    resolve_domain_or_raise(values["TGPROXY_PUBLIC_HOST"], "Telegram proxy host")
-    resolve_domain_or_raise(values["TGPROXY_FAKETLS_DOMAIN"], "Telegram FakeTLS domain")
+    resolve_domain_or_raise(values["MTPROXY_TLS_DOMAIN"], "MTProxy TLS domain")
 
 
 def ensure_venv() -> None:
@@ -404,7 +406,10 @@ def load_instance_env(python: str) -> dict[str, str]:
 
 
 def certificate_request_domains(values: dict[str, str]) -> list[str]:
-    return [values["DOMAIN"]]
+    domains = [values["DOMAIN"]]
+    if mtproxy_enabled(values):
+        domains.append(values["MTPROXY_TLS_DOMAIN"])
+    return domains
 
 
 def issue_certificate(values: dict[str, str]) -> dict[str, object]:
@@ -452,6 +457,11 @@ def cleanup_previous_stack(preflight: bool = False) -> None:
 
 def ensure_runtime_networks(values: dict[str, str]) -> None:
     ensure_external_bridge_network("proxy-net")
+    if mtproxy_enabled(values):
+        ensure_external_bridge_network(
+            values.get("MTPROXY_LOOP_NETWORK", "mtproxy-loop-net"),
+            values.get("MTPROXY_LOOP_SUBNET", "172.29.100.0/24"),
+        )
 
 
 def ensure_external_bridge_network(name: str, subnet: str | None = None) -> None:
@@ -497,6 +507,8 @@ def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:
         status = state.get("Status")
         health = (state.get("Health") or {}).get("Status")
         if health == "healthy":
+            return
+        if service == "mtproxy" and status == "running":
             return
         if health is None and status == "running":
             return
@@ -589,15 +601,15 @@ def compose_files(values: dict[str, str]) -> list[Path]:
         paths.SERVICE_XUI_COMPOSE_PATH,
         paths.SERVICE_SUBCONVERTER_COMPOSE_PATH,
     ]
-    if tgproxy_enabled(values):
-        files.append(paths.SERVICE_TGPROXY_COMPOSE_PATH)
+    if mtproxy_enabled(values):
+        files.append(paths.SERVICE_MTPROXY_COMPOSE_PATH)
     return files
 
 
 def runtime_services(values: dict[str, str]) -> list[str]:
     services = ["xui", "conv"]
-    if tgproxy_enabled(values):
-        services.append("tgproxy")
+    if mtproxy_enabled(values):
+        services.append("mtproxy")
     return services
 
 
@@ -677,10 +689,9 @@ def print_summary(values: dict[str, str]) -> None:
         lines.append("TLS Cert     : not found")
     if staging:
         lines.append("TLS Mode     : Let's Encrypt staging")
-    if tgproxy_enabled(values):
-        lines.append(f"TG Proxy URL : {tgproxy_tg_link(values)}")
-        lines.append(f"TG Host      : {values['TGPROXY_PUBLIC_HOST']}")
-        lines.append(f"FakeTLS SNI  : {values['TGPROXY_FAKETLS_DOMAIN']}")
+    if mtproxy_enabled(values):
+        lines.append(f"MTProxy URL  : {mtproxy_tg_link(values)}")
+        lines.append(f"MTProxy SNI  : {values['MTPROXY_TLS_DOMAIN']}")
     width = max(len(line) for line in lines) + 2
     print("\n" * 2, end="")
     print("Connection details")

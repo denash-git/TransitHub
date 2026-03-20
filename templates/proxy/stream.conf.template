@@ -4,9 +4,6 @@ ${STREAM_ROUTING_BLOCK}
     server {
         listen 443 reuseport;
         proxy_pass $upstream_backend;
-        proxy_protocol on;
         ssl_preread on;
     }
-
-${STREAM_INTERNAL_SERVER_BLOCK}
 }

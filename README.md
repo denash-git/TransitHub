@@ -35,7 +35,7 @@ bash install.sh
 
 ## Что делает установщик
 
-- спрашивает основной домен, REALITY-домен, host Telegram-прокси, FakeTLS-домен и timezone
+- спрашивает основной домен, REALITY-домен, опциональный MTProxy TLS domain и timezone
 - ставит системные зависимости
 - поднимает Docker и Compose
 - настраивает `ufw`
@@ -44,7 +44,7 @@ bash install.sh
 - поддерживает `CERTBOT_STAGING=true` для безопасных тестовых прогонов
 - генерирует `instance.env`
 - рендерит nginx, клиентскую страницу и fake-site
-- поднимает `xui`, `conv`, `nginx` и опционально `tgproxy`
+- поднимает `xui`, `conv`, `nginx` и опционально `mtproxy`
 - настраивает панель `3x-ui` и базовые inbound'ы
 - после успешной установки удаляет install-time файлы с VPS
 

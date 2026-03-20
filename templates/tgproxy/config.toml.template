@@ -1,9 +1,0 @@
-secret = "${TGPROXY_SECRET}"
-bind-to = "0.0.0.0:${TGPROXY_PORT}"
-proxy-protocol-listener = true
-prefer-ip = "prefer-ipv4"
-auto-update = false
-
-[network]
-dns = ""
-proxies = []
