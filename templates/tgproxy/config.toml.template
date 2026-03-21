@@ -3,6 +3,7 @@ bind-to = "0.0.0.0:${TGPROXY_PORT}"
 proxy-protocol-listener = true
 prefer-ip = "prefer-ipv4"
 auto-update = false
+tolerate-time-skewness = "${TGPROXY_TOLERATE_TIME_SKEWNESS}"
 
 [domain-fronting]
 ip = "${TGPROXY_LOOP_NGINX_IP}"

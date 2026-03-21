@@ -67,6 +67,7 @@ ENV_FIELDS = [
     EnvField("CLASH_TEMPLATE", "default", True, "Selected Clash template."),
     EnvField("TGPROXY_PUBLIC_HOST", "", True, "Hostname used in tg:// links and FakeTLS SNI."),
     EnvField("TGPROXY_FAKETLS_DOMAIN", "", False, "Derived FakeTLS hostname. Kept equal to TGPROXY_PUBLIC_HOST."),
+    EnvField("TGPROXY_TOLERATE_TIME_SKEWNESS", "30s", False, "Accepted FakeTLS timestamp skew for Telegram proxy clients."),
     EnvField("TGPROXY_CLOAK_PORT", "9444", False, "Internal nginx HTTPS backend port used as tgproxy cloak site."),
     EnvField("TGPROXY_LOOP_NETWORK", "tgproxy-loop-net", False, "Dedicated Docker network used between nginx and tgproxy."),
     EnvField("TGPROXY_LOOP_SUBNET", "10.251.79.0/24", False, "Dedicated Docker subnet used between nginx and tgproxy."),
