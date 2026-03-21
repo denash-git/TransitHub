@@ -77,9 +77,9 @@ CERTBOT_STAGING=true bash <(curl -fsSL https://raw.githubusercontent.com/denash-
 - с `3x-ui` можно взаимодействовать и через CLI внутри контейнера:
 
 ```bash
-docker ps --format '{{.Names}}' | grep xui
-docker exec -it debian12_xui_1 /bin/sh
+XUI_CONTAINER="$(docker ps --format '{{.Names}}' | grep xui | head -n1)"
+docker exec -it "$XUI_CONTAINER" /bin/sh
 x-ui
 ```
 
-Имя контейнера зависит от имени инстанса, поэтому сначала лучше определить его через `docker ps`.
+Имя контейнера зависит от имени инстанса, поэтому сначала его нужно определить, а не подставлять фиксированное значение.
