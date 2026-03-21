@@ -47,6 +47,7 @@ PRUNE_RUNTIME_DIRS = [
 TOTAL_STEPS = 10
 BLUE = "\033[1;34m"
 GREEN = "\033[1;32m"
+RED = "\033[1;31m"
 RESET = "\033[0m"
 
 
@@ -172,6 +173,7 @@ def preflight(overrides: dict[str, str]) -> None:
     validate_supported_os()
     require_command("apt-get", "apt-get is not available. This installer supports Debian 12+ only.")
     validate_apt_access()
+    validate_time_sync_status()
     validate_port_available(80)
     validate_port_available(443)
     validate_proxy_network_state()
@@ -230,6 +232,58 @@ def validate_apt_access() -> None:
     )
     if completed.returncode != 0:
         raise InstallerError("apt-get is present but not working correctly on this host.")
+
+
+def validate_time_sync_status() -> None:
+    if shutil.which("timedatectl") is None:
+        warn(
+            "Could not verify host time synchronization because `timedatectl` is unavailable. "
+            "Telegram proxy may reject clients if VPS time drifts."
+        )
+        return
+
+    completed = subprocess.run(
+        [
+            "timedatectl",
+            "show",
+            "--property=SystemClockSynchronized",
+            "--property=NTPSynchronized",
+            "--property=NTP",
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        warn(
+            "Could not verify host time synchronization via `timedatectl`. "
+            "Telegram proxy may reject clients if VPS time drifts."
+        )
+        return
+
+    properties: dict[str, str] = {}
+    for raw_line in completed.stdout.splitlines():
+        line = raw_line.strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        properties[key] = value.strip().lower()
+
+    clock_synced = properties.get("SystemClockSynchronized") == "yes" or properties.get("NTPSynchronized") == "yes"
+    ntp_enabled = properties.get("NTP") == "yes"
+    if clock_synced and ntp_enabled:
+        return
+
+    details = (
+        f"SystemClockSynchronized={properties.get('SystemClockSynchronized', 'unknown')}, "
+        f"NTPSynchronized={properties.get('NTPSynchronized', 'unknown')}, "
+        f"NTP={properties.get('NTP', 'unknown')}"
+    )
+    warn(
+        "Host time synchronization is not confirmed. "
+        f"{details}. Installation will continue, but Telegram proxy may fail until NTP is active and the clock is synced."
+    )
 
 
 def validate_port_available(port: int) -> None:
@@ -653,6 +707,10 @@ def step(number: int, title: str) -> None:
 
 def note(message: str) -> None:
     print(f"  - {message}")
+
+
+def warn(message: str) -> None:
+    print(f"{RED}  ! {message}{RESET}")
 
 
 def print_summary(values: dict[str, str]) -> None:
