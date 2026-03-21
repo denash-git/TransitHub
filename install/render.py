@@ -27,7 +27,7 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         f"        {context['REALITY_DOMAIN']} reality_ingress_backend;\n",
     ]
     if tgproxy_enabled(context):
-        stream_routes.append(f"        {context['TGPROXY_FAKETLS_DOMAIN']} tgproxy_ingress_backend;\n")
+        stream_routes.append(f"        {context['TGPROXY_FAKETLS_DOMAIN']} tgproxy_backend;\n")
     stream_routes.extend(
         [
             "        default panel_ingress_backend;\n",
@@ -40,14 +40,6 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
             "    }\n\n",
         ]
     )
-    if tgproxy_enabled(context):
-        stream_routes.extend(
-            [
-                "    upstream tgproxy_ingress_backend {\n",
-                f"        server 127.0.0.1:{context.get('STREAM_TGPROXY_PORT', '9445')};\n",
-                "    }\n\n",
-            ]
-        )
     stream_routes.extend(
         [
             "    upstream reality_backend {\n",
@@ -78,17 +70,6 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         "        proxy_pass panel_https_backend;\n",
         "    }\n",
     ]
-    if tgproxy_enabled(context):
-        stream_internal_servers.extend(
-            [
-                "\n",
-                "    server {\n",
-                f"        listen 127.0.0.1:{context.get('STREAM_TGPROXY_PORT', '9445')} proxy_protocol;\n",
-                "        proxy_pass tgproxy_backend;\n",
-                "        proxy_protocol on;\n",
-                "    }\n",
-            ]
-        )
     render_context["STREAM_INTERNAL_SERVER_BLOCK"] = "".join(stream_internal_servers).rstrip()
 
     render_context["TGPROXY_CLOAK_SERVER_BLOCK"] = ""
