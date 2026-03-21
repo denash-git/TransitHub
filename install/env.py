@@ -288,6 +288,13 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
         } or current_cert_dir.startswith("/etc/letsencrypt/live/"):
             synced["CERT_LIVE_DIR"] = desired_cert_dir
 
+    if synced.get("TGPROXY_LOOP_SUBNET", "").strip() in {"", "172.29.100.0/24"}:
+        synced["TGPROXY_LOOP_SUBNET"] = "10.251.79.0/24"
+    if synced.get("TGPROXY_LOOP_NGINX_IP", "").strip() in {"", "172.29.100.10"}:
+        synced["TGPROXY_LOOP_NGINX_IP"] = "10.251.79.10"
+    if synced.get("TGPROXY_LOOP_TGPROXY_IP", "").strip() in {"", "172.29.100.11"}:
+        synced["TGPROXY_LOOP_TGPROXY_IP"] = "10.251.79.11"
+
     synced["TGPROXY_FAKETLS_DOMAIN"] = tgproxy_public_host
     synced["ENABLE_TGPROXY"] = "true" if tgproxy_public_host else "false"
     synced["FAKE_SITE_TEMPLATE"] = pick_fake_site_template(synced.get("FAKE_SITE_TEMPLATE", ""))
