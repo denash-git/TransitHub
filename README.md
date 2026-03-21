@@ -15,7 +15,13 @@ TransitHub v2 разворачивает proxy platform на чистой VPS с
 Одной строкой:
 
 ```bash
-sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
+или:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
 ```
 
 Или обычным clone-сценарием:
@@ -58,7 +64,13 @@ bash install.sh
 - для тестового сертификата можно запустить:
 
 ```bash
-CERTBOT_STAGING=true sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+CERTBOT_STAGING=true bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+```
+
+или:
+
+```bash
+CERTBOT_STAGING=true bash <(curl -fsSL https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
 ```
 
 - если время на VPS не синхронизировано, установщик покажет предупреждение, но продолжит работу
