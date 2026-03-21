@@ -90,12 +90,20 @@ bash install.sh
   Основной домен панели, клиентской страницы и подписок
 - `REALITY domain`
   REALITY SNI-домен
-- `MTProxy TLS domain`
-  необязательный SNI-домен для официального Telegram MTProxy в TLS-only режиме; если оставить пустым, MTProxy не поднимается
+- `Telegram proxy host`
+  публичный host для `tg://proxy?...`; если ввести `-`, Telegram-прокси не поднимается
+- `Telegram FakeTLS domain`
+  внешний домен, который кодируется в FakeTLS-секрет и используется `tgproxy` для fronting
 - `Timezone`
   timezone контейнеров; по умолчанию берётся timezone VPS
 
 Fake-site шаблон выбирается автоматически.
+
+Важно:
+
+- `Telegram proxy host` это адрес в `tg://proxy?...`, куда клиент физически подключается
+- `Telegram FakeTLS domain` это домен внутри секрета; именно по нему `nginx stream` отправляет трафик в `tgproxy`
+- эти значения не должны совпадать
 
 ## Что проверяется до установки
 
@@ -107,6 +115,7 @@ Fake-site шаблон выбирается автоматически.
 - свободны ли порты `80` и `443`
 - не конфликтует ли Docker network `proxy-net`
 - резолвится ли основной домен
+- если включён Telegram-прокси, резолвятся ли его public host и FakeTLS domain
 
 Если какая-то из проверок не проходит, установка останавливается сразу с понятным сообщением.
 
@@ -121,7 +130,7 @@ Fake-site шаблон выбирается автоматически.
 5. установка системных пакетов, Docker, Compose и настройка `ufw`
 6. генерация `instance.env` и runtime-файлов
 7. выпуск или повторное использование TLS-сертификата
-8. запуск `xui`, `conv` и опционально `mtproxy`
+8. запуск `xui`, `conv` и опционально `tgproxy`
 9. первичная настройка `x-ui.db`
 10. запуск полного стека и очистка install-time файлов
 
@@ -147,6 +156,8 @@ Fake-site шаблон выбирается автоматически.
   Runtime-каталог `3x-ui`
 - `subconverter/`
   Runtime-каталог конвертера
+- `tgproxy/`
+  Runtime-каталог Telegram-прокси
 - `web/`
   Статические web-ресурсы
 - `docs/`
@@ -171,6 +182,7 @@ Fake-site шаблон выбирается автоматически.
 - `nginx/`
 - `xui/`
 - `subconverter/`
+- `tgproxy/`
 - `web/`
 
 ## Runtime-структура
@@ -185,7 +197,7 @@ Fake-site шаблон выбирается автоматически.
 - `nginx/config/nginx.conf`
   Основной nginx config
 - `nginx/config/stream.conf`
-  Stream-проксирование для REALITY
+  Stream-проксирование для REALITY и Telegram FakeTLS-трафика
 - `nginx/config/site.conf`
   HTTP/HTTPS routing
 - `nginx/extensions/`
@@ -207,6 +219,13 @@ Fake-site шаблон выбирается автоматически.
 - `subconverter/docker-compose.yml`
   Compose-описание сервиса `conv`
 
+### Telegram-прокси
+
+- `tgproxy/config.toml`
+  Сгенерированный конфиг `mtg` с FakeTLS-секретом и включённым `proxy-protocol-listener`
+- `tgproxy/docker-compose.yml`
+  Compose-описание сервиса `tgproxy`
+
 ### Веб-ресурсы
 
 - `web/client_page/index.html`
@@ -218,11 +237,12 @@ Fake-site шаблон выбирается автоматически.
 
 ## Docker-схема
 
-Используются три compose-файла:
+Используются четыре compose-файла:
 
 - `nginx/docker-compose.yml`
 - `xui/docker-compose.yml`
 - `subconverter/docker-compose.yml`
+- `tgproxy/docker-compose.yml`
 
 Все сервисы подключаются к внешней сети:
 
@@ -238,6 +258,8 @@ Fake-site шаблон выбирается автоматически.
   Панель и subscription backend
 - `conv`
   Конвертер подписок на базе `tindy2013/subconverter`
+- `tgproxy`
+  Telegram-прокси на базе `nineseconds/mtg:2`
 
 ## Что настраивается в 3x-ui автоматически
 

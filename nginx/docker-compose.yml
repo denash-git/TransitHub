@@ -20,13 +20,8 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       proxy-net:
-      mtproxy-loop-net:
-        ipv4_address: ${MTPROXY_LOOP_NGINX_IP:-172.29.100.10}
 
 networks:
   proxy-net:
     external: true
     name: proxy-net
-  mtproxy-loop-net:
-    external: true
-    name: ${MTPROXY_LOOP_NETWORK:-mtproxy-loop-net}
