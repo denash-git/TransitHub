@@ -453,7 +453,7 @@ def ensure_runtime_networks(values: dict[str, str]) -> None:
     ensure_external_bridge_network("proxy-net")
     ensure_external_bridge_network(
         values.get("TGPROXY_LOOP_NETWORK", "tgproxy-loop-net"),
-        values.get("TGPROXY_LOOP_SUBNET", "172.29.100.0/24"),
+        values.get("TGPROXY_LOOP_SUBNET", "10.251.79.0/24"),
     )
 
 

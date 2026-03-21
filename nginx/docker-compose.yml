@@ -21,7 +21,7 @@ services:
     networks:
       proxy-net:
       tgproxy-loop-net:
-        ipv4_address: ${TGPROXY_LOOP_NGINX_IP:-172.29.100.10}
+        ipv4_address: ${TGPROXY_LOOP_NGINX_IP:-10.251.79.10}
 
 networks:
   proxy-net:
