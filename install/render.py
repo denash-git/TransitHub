@@ -21,6 +21,7 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         if context.get("ENABLE_EXTENSIONS", "true").strip().lower() == "true"
         else ""
     )
+
     stream_routes = [
         "    map $ssl_preread_server_name $upstream_backend {\n",
         f"        {context['REALITY_DOMAIN']} reality_ingress_backend;\n",
@@ -89,6 +90,24 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
             ]
         )
     render_context["STREAM_INTERNAL_SERVER_BLOCK"] = "".join(stream_internal_servers).rstrip()
+
+    render_context["TGPROXY_CLOAK_SERVER_BLOCK"] = ""
+    if tgproxy_enabled(context):
+        render_context["TGPROXY_CLOAK_SERVER_BLOCK"] = (
+            "\nserver {\n"
+            f"    listen {context.get('TGPROXY_CLOAK_PORT', '9444')} ssl;\n"
+            "    http2 on;\n"
+            f"    server_name {context['TGPROXY_FAKETLS_DOMAIN']};\n"
+            "    port_in_redirect off;\n\n"
+            f"    ssl_certificate {context['CERT_LIVE_DIR']}/fullchain.pem;\n"
+            f"    ssl_certificate_key {context['CERT_LIVE_DIR']}/privkey.pem;\n\n"
+            "    root /srv/fakesite;\n"
+            "    index index.html;\n\n"
+            "    location / {\n"
+            "        try_files $uri $uri/ /index.html;\n"
+            "    }\n"
+            "}\n"
+        )
 
     nginx_templates = {
         "nginx.conf.template": paths.SERVICE_NGINX_CONFIG_DIR / "nginx.conf",

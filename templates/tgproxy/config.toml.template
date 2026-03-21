@@ -4,6 +4,10 @@ proxy-protocol-listener = true
 prefer-ip = "prefer-ipv4"
 auto-update = false
 
+[domain-fronting]
+ip = "${TGPROXY_LOOP_NGINX_IP}"
+port = ${TGPROXY_CLOAK_PORT}
+
 [network]
 dns = ""
 proxies = []

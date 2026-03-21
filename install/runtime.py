@@ -132,15 +132,7 @@ def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
             entered = input(f"{label} [{current or 'disabled'}]: ").strip()
             if entered == "-":
                 prompted["TGPROXY_PUBLIC_HOST"] = ""
-                prompted["TGPROXY_FAKETLS_DOMAIN"] = ""
-                continue
-        elif key == "TGPROXY_FAKETLS_DOMAIN":
-            if not prompted.get("TGPROXY_PUBLIC_HOST", "").strip():
-                continue
-            entered = input(f"{label} [{current}]: ").strip()
-            if entered == "-":
-                prompted["TGPROXY_FAKETLS_DOMAIN"] = ""
-                prompted["TGPROXY_PUBLIC_HOST"] = ""
+                prompted["TGPROXY_SECRET"] = ""
                 continue
         else:
             entered = input(f"{label} [{current}]: ").strip()
@@ -153,10 +145,9 @@ def apply_overrides(values: dict[str, str], overrides: dict[str, str] | None) ->
     merged = dict(values)
     if overrides:
         merged.update(overrides)
-        if "TGPROXY_PUBLIC_HOST" in overrides and "TGPROXY_FAKETLS_DOMAIN" not in overrides:
+        if "TGPROXY_PUBLIC_HOST" in overrides and "TGPROXY_SECRET" not in overrides:
             merged["TGPROXY_SECRET"] = ""
-        if "TGPROXY_FAKETLS_DOMAIN" in overrides and "TGPROXY_SECRET" not in overrides:
-            merged["TGPROXY_SECRET"] = ""
+            merged["TGPROXY_FAKETLS_DOMAIN"] = ""
     return sync_derived_fields(merged)
 
 

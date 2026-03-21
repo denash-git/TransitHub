@@ -65,8 +65,13 @@ ENV_FIELDS = [
     EnvField("FAKE_SITE_TEMPLATE", "signal-wire", True, "Selected fake-site template."),
     EnvField("WEB_SUB_TEMPLATE", "clean-card", True, "Selected web subscription template."),
     EnvField("CLASH_TEMPLATE", "default", True, "Selected Clash template."),
-    EnvField("TGPROXY_PUBLIC_HOST", "", True, "Hostname or IP used in tg:// Telegram proxy links."),
-    EnvField("TGPROXY_FAKETLS_DOMAIN", "google.com", True, "External FakeTLS/fronting domain encoded into the Telegram proxy secret."),
+    EnvField("TGPROXY_PUBLIC_HOST", "", True, "Hostname used in tg:// links and FakeTLS SNI."),
+    EnvField("TGPROXY_FAKETLS_DOMAIN", "", False, "Derived FakeTLS hostname. Kept equal to TGPROXY_PUBLIC_HOST."),
+    EnvField("TGPROXY_CLOAK_PORT", "9444", False, "Internal nginx HTTPS backend port used as tgproxy cloak site."),
+    EnvField("TGPROXY_LOOP_NETWORK", "tgproxy-loop-net", False, "Dedicated Docker network used between nginx and tgproxy."),
+    EnvField("TGPROXY_LOOP_SUBNET", "172.29.100.0/24", False, "Dedicated Docker subnet used between nginx and tgproxy."),
+    EnvField("TGPROXY_LOOP_NGINX_IP", "172.29.100.10", False, "Static nginx IP on the tgproxy loop network."),
+    EnvField("TGPROXY_LOOP_TGPROXY_IP", "172.29.100.11", False, "Static tgproxy IP on the tgproxy loop network."),
     EnvField("CERTBOT_EMAIL", "", True, "Optional Let's Encrypt registration email."),
     EnvField("CERTBOT_STAGING", "false", True, "Use Let's Encrypt staging instead of production."),
     EnvField("CERT_LIVE_DIR", "/etc/letsencrypt/live/example.com", True, "Host certificate directory mounted into runtime."),
@@ -116,7 +121,6 @@ PROMPTED_FIELDS = [
     "DOMAIN",
     "REALITY_DOMAIN",
     "TGPROXY_PUBLIC_HOST",
-    "TGPROXY_FAKETLS_DOMAIN",
     "TZ",
     "WEB_SUB_TEMPLATE",
 ]
@@ -124,8 +128,7 @@ PROMPTED_FIELDS = [
 FIELD_PROMPTS = {
     "DOMAIN": "Main domain",
     "REALITY_DOMAIN": "REALITY domain",
-    "TGPROXY_PUBLIC_HOST": "Telegram proxy host",
-    "TGPROXY_FAKETLS_DOMAIN": "Telegram FakeTLS domain",
+    "TGPROXY_PUBLIC_HOST": "Telegram proxy domain",
     "TZ": "Timezone",
     "WEB_SUB_TEMPLATE": "Web subscription template",
 }
@@ -273,7 +276,6 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
     synced = dict(values)
     domain = synced.get("DOMAIN", "").strip()
     tgproxy_public_host = synced.get("TGPROXY_PUBLIC_HOST", "").strip()
-    tgproxy_faketls_domain = synced.get("TGPROXY_FAKETLS_DOMAIN", "").strip()
     staging = synced.get("CERTBOT_STAGING", "false").strip().lower() == "true"
     if domain:
         desired_cert_dir = f"/etc/letsencrypt/live/{cert_name_for(domain, staging)}"
@@ -285,13 +287,9 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
             desired_cert_dir,
         } or current_cert_dir.startswith("/etc/letsencrypt/live/"):
             synced["CERT_LIVE_DIR"] = desired_cert_dir
-        if tgproxy_faketls_domain and (not tgproxy_public_host or tgproxy_public_host == domain):
-            synced["TGPROXY_PUBLIC_HOST"] = f"tg.{domain}"
-    synced["ENABLE_TGPROXY"] = (
-        "true"
-        if synced.get("TGPROXY_PUBLIC_HOST", "").strip() and tgproxy_faketls_domain
-        else "false"
-    )
+
+    synced["TGPROXY_FAKETLS_DOMAIN"] = tgproxy_public_host
+    synced["ENABLE_TGPROXY"] = "true" if tgproxy_public_host else "false"
     synced["FAKE_SITE_TEMPLATE"] = pick_fake_site_template(synced.get("FAKE_SITE_TEMPLATE", ""))
     return synced
 

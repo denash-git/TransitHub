@@ -88,7 +88,7 @@ detect_tz() {
 }
 
 main() {
-  local tz domain reality_domain tgproxy_public_host tgproxy_faketls_domain fake_site instance_name tgproxy_state
+  local tz domain reality_domain tgproxy_public_host fake_site instance_name tgproxy_state
   local -a install_args
 
   frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
@@ -96,7 +96,7 @@ main() {
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
   printf '\n' > /dev/tty
-  printf '%b%s%b [tg.%s]: ' "$BOLD" 'Telegram proxy host' "$RESET" "$domain" > /dev/tty
+  printf '%b%s%b [tg.%s]: ' "$BOLD" 'Telegram proxy domain' "$RESET" "$domain" > /dev/tty
   IFS= read -r tgproxy_public_host < /dev/tty
   if [[ -z "$tgproxy_public_host" ]]; then
     tgproxy_public_host="tg.${domain}"
@@ -104,20 +104,10 @@ main() {
     tgproxy_public_host=""
   fi
   printf '\n' > /dev/tty
-  if [[ -n "$tgproxy_public_host" ]]; then
-    printf '%b%s%b [google.com]: ' "$BOLD" 'Telegram FakeTLS domain' "$RESET" > /dev/tty
-    IFS= read -r tgproxy_faketls_domain < /dev/tty
-    if [[ -z "$tgproxy_faketls_domain" ]]; then
-      tgproxy_faketls_domain="google.com"
-    fi
-  else
-    tgproxy_faketls_domain=""
-  fi
-  printf '\n' > /dev/tty
   tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"
   if [[ -n "$tgproxy_public_host" ]]; then
-    tgproxy_state="${tgproxy_public_host} / ${tgproxy_faketls_domain}"
+    tgproxy_state="${tgproxy_public_host}"
   else
     tgproxy_state='disabled'
   fi
@@ -138,7 +128,6 @@ main() {
     --set "DOMAIN=${domain}"
     --set "REALITY_DOMAIN=${reality_domain}"
     --set "TGPROXY_PUBLIC_HOST=${tgproxy_public_host}"
-    --set "TGPROXY_FAKETLS_DOMAIN=${tgproxy_faketls_domain}"
     --set "TZ=${tz}"
     --set "FAKE_SITE_TEMPLATE=${fake_site}"
   )

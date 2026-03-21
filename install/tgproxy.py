@@ -16,15 +16,15 @@ def secret(fake_tls_domain: str) -> str:
 
 
 def enabled(values: dict[str, str]) -> bool:
-    return (
-        bool_env(values.get("ENABLE_TGPROXY"))
-        and bool(values.get("TGPROXY_PUBLIC_HOST", "").strip())
-        and bool(values.get("TGPROXY_FAKETLS_DOMAIN", "").strip())
-    )
+    return bool_env(values.get("ENABLE_TGPROXY")) and bool(values.get("TGPROXY_PUBLIC_HOST", "").strip())
 
 
 def public_host(values: dict[str, str]) -> str:
     return values.get("TGPROXY_PUBLIC_HOST", "").strip() or values.get("DOMAIN", "").strip()
+
+
+def faketls_domain(values: dict[str, str]) -> str:
+    return values.get("TGPROXY_FAKETLS_DOMAIN", "").strip() or public_host(values)
 
 
 def tg_link(values: dict[str, str]) -> str:
@@ -40,20 +40,21 @@ def validate(values: dict[str, str]) -> None:
     if not bool_env(values.get("ENABLE_TGPROXY")):
         return
 
-    public = values.get("TGPROXY_PUBLIC_HOST", "").strip().lower()
-    fake_tls = values.get("TGPROXY_FAKETLS_DOMAIN", "").strip().lower()
+    public = public_host(values).strip().lower()
+    fake_tls = faketls_domain(values).strip().lower()
     if not public:
         raise ValueError("Telegram proxy is enabled, but TGPROXY_PUBLIC_HOST is empty.")
     if not fake_tls:
         raise ValueError("Telegram proxy is enabled, but TGPROXY_FAKETLS_DOMAIN is empty.")
+    if fake_tls != public:
+        raise ValueError("TGPROXY_FAKETLS_DOMAIN must match TGPROXY_PUBLIC_HOST in this build.")
 
     forbidden = {
         values.get("DOMAIN", "").strip().lower(),
         values.get("REALITY_DOMAIN", "").strip().lower(),
-        public,
     }
-    if fake_tls in forbidden:
-        raise ValueError("TGPROXY_FAKETLS_DOMAIN must not match DOMAIN, REALITY_DOMAIN, or TGPROXY_PUBLIC_HOST.")
+    if public in forbidden:
+        raise ValueError("TGPROXY_PUBLIC_HOST must not match DOMAIN or REALITY_DOMAIN.")
 
     tgproxy_secret = values.get("TGPROXY_SECRET", "").strip().lower()
     if not tgproxy_secret.startswith("ee") or len(tgproxy_secret) <= 34:

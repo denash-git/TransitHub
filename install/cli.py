@@ -128,7 +128,7 @@ def run_install() -> int:
 
     step(8, "Start core containers")
     cleanup_previous_stack()
-    note("Create or reuse external Docker network proxy-net")
+    note("Create or reuse external Docker networks proxy-net and tgproxy-loop-net")
     ensure_runtime_networks(values)
     note(f"Start {', '.join(enabled_services)} containers")
     note("First run may take a few minutes while Docker pulls images")
@@ -180,10 +180,7 @@ def preflight(overrides: dict[str, str]) -> None:
         resolve_domain_or_raise(domain)
     tgproxy_public_host = overrides.get("TGPROXY_PUBLIC_HOST", "").strip()
     if tgproxy_public_host:
-        resolve_domain_or_raise(tgproxy_public_host, "Telegram proxy host")
-    tgproxy_faketls_domain = overrides.get("TGPROXY_FAKETLS_DOMAIN", "").strip()
-    if tgproxy_faketls_domain:
-        resolve_domain_or_raise(tgproxy_faketls_domain, "Telegram FakeTLS domain")
+        resolve_domain_or_raise(tgproxy_public_host, "Telegram proxy domain")
 
 
 def require_root() -> None:
@@ -288,8 +285,7 @@ def resolve_domain_or_raise(domain: str, label: str = "Main domain") -> None:
 def resolve_tgproxy_domains(values: dict[str, str]) -> None:
     if not tgproxy_enabled(values):
         return
-    resolve_domain_or_raise(values["TGPROXY_PUBLIC_HOST"], "Telegram proxy host")
-    resolve_domain_or_raise(values["TGPROXY_FAKETLS_DOMAIN"], "Telegram FakeTLS domain")
+    resolve_domain_or_raise(values["TGPROXY_PUBLIC_HOST"], "Telegram proxy domain")
 
 
 def ensure_venv() -> None:
@@ -404,7 +400,10 @@ def load_instance_env(python: str) -> dict[str, str]:
 
 
 def certificate_request_domains(values: dict[str, str]) -> list[str]:
-    return [values["DOMAIN"]]
+    domains = [values["DOMAIN"]]
+    if tgproxy_enabled(values):
+        domains.append(values["TGPROXY_PUBLIC_HOST"])
+    return domains
 
 
 def issue_certificate(values: dict[str, str]) -> dict[str, object]:
@@ -452,6 +451,10 @@ def cleanup_previous_stack(preflight: bool = False) -> None:
 
 def ensure_runtime_networks(values: dict[str, str]) -> None:
     ensure_external_bridge_network("proxy-net")
+    ensure_external_bridge_network(
+        values.get("TGPROXY_LOOP_NETWORK", "tgproxy-loop-net"),
+        values.get("TGPROXY_LOOP_SUBNET", "172.29.100.0/24"),
+    )
 
 
 def ensure_external_bridge_network(name: str, subnet: str | None = None) -> None:
@@ -679,7 +682,7 @@ def print_summary(values: dict[str, str]) -> None:
         lines.append("TLS Mode     : Let's Encrypt staging")
     if tgproxy_enabled(values):
         lines.append(f"TG Proxy URL : {tgproxy_tg_link(values)}")
-        lines.append(f"TG Host      : {values['TGPROXY_PUBLIC_HOST']}")
+        lines.append(f"TG Domain    : {values['TGPROXY_PUBLIC_HOST']}")
         lines.append(f"FakeTLS SNI  : {values['TGPROXY_FAKETLS_DOMAIN']}")
     width = max(len(line) for line in lines) + 2
     print("\n" * 2, end="")

@@ -10,8 +10,13 @@ services:
       - "${TGPROXY_PORT:-3128}"
     networks:
       proxy-net:
+      tgproxy-loop-net:
+        ipv4_address: ${TGPROXY_LOOP_TGPROXY_IP:-172.29.100.11}
 
 networks:
   proxy-net:
     external: true
     name: proxy-net
+  tgproxy-loop-net:
+    external: true
+    name: ${TGPROXY_LOOP_NETWORK:-tgproxy-loop-net}
