@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   tgproxy:
-    image: ${TGPROXY_IMAGE:-nineseconds/mtg:2}
+    image: ${TGPROXY_IMAGE:-nineseconds/mtg@sha256:32e3b3e75ff1931c7b7a3d63557f0a1dd1f7963c08c97bacfa28f3267827ce0f}
     restart: unless-stopped
     volumes:
       - ./tgproxy/config.toml:/config.toml:ro

@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   xui:
-    image: ${XUI_IMAGE:-ghcr.io/mhsanaei/3x-ui:latest}
+    image: ${XUI_IMAGE:-ghcr.io/mhsanaei/3x-ui@sha256:34c46ea6d838df981c4760bd1fe442413c2b99bbe4bb49dfa3d1bfb8a8a92496}
     restart: unless-stopped
     volumes:
       - ./xui/data:/etc/x-ui

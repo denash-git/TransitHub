@@ -14,6 +14,21 @@ from .certbot import cert_name_for
 from .tgproxy import secret as generate_tgproxy_secret
 
 
+PINNED_RUNTIME_IMAGES = {
+    "XUI_IMAGE": "ghcr.io/mhsanaei/3x-ui@sha256:34c46ea6d838df981c4760bd1fe442413c2b99bbe4bb49dfa3d1bfb8a8a92496",
+    "NGINX_IMAGE": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+    "SUBCONVERTER_IMAGE": "tindy2013/subconverter@sha256:52191601780c1e6427e2239e330a7e1147ff5a684a204ca9cc75b4ada2d7fa75",
+    "TGPROXY_IMAGE": "nineseconds/mtg@sha256:32e3b3e75ff1931c7b7a3d63557f0a1dd1f7963c08c97bacfa28f3267827ce0f",
+}
+
+LEGACY_RUNTIME_IMAGE_REFS = {
+    "XUI_IMAGE": {"ghcr.io/mhsanaei/3x-ui:latest"},
+    "NGINX_IMAGE": {"nginx:1.27-alpine"},
+    "SUBCONVERTER_IMAGE": {"tindy2013/subconverter:latest"},
+    "TGPROXY_IMAGE": {"nineseconds/mtg:2"},
+}
+
+
 def utc_timestamp() -> str:
     return datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat()
 
@@ -54,10 +69,15 @@ ENV_FIELDS = [
     EnvField("REALITY_DOMAIN", "reality.example.com", True, "REALITY SNI destination domain."),
     EnvField("AUTODOMAIN", "false", True, "Optional domain automation flag."),
     EnvField("TZ", "Europe/Moscow", True, "Container timezone."),
-    EnvField("XUI_IMAGE", "ghcr.io/mhsanaei/3x-ui:latest", True, "Official 3x-ui image."),
-    EnvField("NGINX_IMAGE", "nginx:1.27-alpine", True, "Reverse proxy image."),
-    EnvField("SUBCONVERTER_IMAGE", "tindy2013/subconverter:latest", True, "Subscription converter image."),
-    EnvField("TGPROXY_IMAGE", "nineseconds/mtg:2", True, "Telegram proxy container image."),
+    EnvField("XUI_IMAGE", PINNED_RUNTIME_IMAGES["XUI_IMAGE"], True, "Pinned 3x-ui image digest."),
+    EnvField("NGINX_IMAGE", PINNED_RUNTIME_IMAGES["NGINX_IMAGE"], True, "Pinned reverse proxy image digest."),
+    EnvField(
+        "SUBCONVERTER_IMAGE",
+        PINNED_RUNTIME_IMAGES["SUBCONVERTER_IMAGE"],
+        True,
+        "Pinned subscription converter image digest.",
+    ),
+    EnvField("TGPROXY_IMAGE", PINNED_RUNTIME_IMAGES["TGPROXY_IMAGE"], True, "Pinned Telegram proxy image digest."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
     EnvField("ENABLE_TGPROXY", "false", True, "Whether to run the Telegram proxy service."),
@@ -275,6 +295,11 @@ def ensure_unique_port(values: dict[str, str], key: str) -> None:
 
 def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
     synced = dict(values)
+    for field_name, pinned_ref in PINNED_RUNTIME_IMAGES.items():
+        current_ref = synced.get(field_name, "").strip()
+        if not current_ref or current_ref in LEGACY_RUNTIME_IMAGE_REFS[field_name]:
+            synced[field_name] = pinned_ref
+
     domain = synced.get("DOMAIN", "").strip()
     tgproxy_public_host = synced.get("TGPROXY_PUBLIC_HOST", "").strip()
     staging = synced.get("CERTBOT_STAGING", "false").strip().lower() == "true"

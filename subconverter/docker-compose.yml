@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   conv:
-    image: ${SUBCONVERTER_IMAGE:-tindy2013/subconverter:latest}
+    image: ${SUBCONVERTER_IMAGE:-tindy2013/subconverter@sha256:52191601780c1e6427e2239e330a7e1147ff5a684a204ca9cc75b4ada2d7fa75}
     restart: unless-stopped
     volumes:
       - ./subconverter/data:/base

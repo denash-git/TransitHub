@@ -1,0 +1,26 @@
+{
+  "locked_at_utc": "2026-03-21T09:09:00Z",
+  "captured_from_host": "working-vps",
+  "images": {
+    "XUI_IMAGE": {
+      "source_ref": "ghcr.io/mhsanaei/3x-ui:latest",
+      "pinned_ref": "ghcr.io/mhsanaei/3x-ui@sha256:34c46ea6d838df981c4760bd1fe442413c2b99bbe4bb49dfa3d1bfb8a8a92496",
+      "local_image_id": "sha256:8f1924c997cdf4b9343de38403b8285415d9a31fc899082642153dbeae9dc9de"
+    },
+    "NGINX_IMAGE": {
+      "source_ref": "nginx:1.27-alpine",
+      "pinned_ref": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+      "local_image_id": "sha256:6769dc3a703c719c1d2756bda113659be28ae16cf0da58dd5fd823d6b9a050ea"
+    },
+    "SUBCONVERTER_IMAGE": {
+      "source_ref": "tindy2013/subconverter:latest",
+      "pinned_ref": "tindy2013/subconverter@sha256:52191601780c1e6427e2239e330a7e1147ff5a684a204ca9cc75b4ada2d7fa75",
+      "local_image_id": "sha256:50c3d55898efadd6664b95c309aba96eb4481211e68fd6dc26e33af56cccf0fe"
+    },
+    "TGPROXY_IMAGE": {
+      "source_ref": "nineseconds/mtg:2",
+      "pinned_ref": "nineseconds/mtg@sha256:32e3b3e75ff1931c7b7a3d63557f0a1dd1f7963c08c97bacfa28f3267827ce0f",
+      "local_image_id": "sha256:67b18fdb9cef680da999807361e494f820622490ac5c03d350a0d364b6db1c0e"
+    }
+  }
+}
