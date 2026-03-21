@@ -74,3 +74,12 @@ CERTBOT_STAGING=true bash <(curl -fsSL https://raw.githubusercontent.com/denash-
 ```
 
 - если время на VPS не синхронизировано, установщик покажет предупреждение, но продолжит работу
+- с `3x-ui` можно взаимодействовать и через CLI внутри контейнера:
+
+```bash
+docker ps --format '{{.Names}}' | grep xui
+docker exec -it debian12_xui_1 /bin/sh
+x-ui
+```
+
+Имя контейнера зависит от имени инстанса, поэтому сначала лучше определить его через `docker ps`.
