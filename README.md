@@ -81,5 +81,3 @@ XUI_CONTAINER="$(docker ps --format '{{.Names}}' | grep xui | head -n1)"
 docker exec -it "$XUI_CONTAINER" /bin/sh
 x-ui
 ```
-
-Имя контейнера зависит от имени инстанса, поэтому сначала его нужно определить, а не подставлять фиксированное значение.
