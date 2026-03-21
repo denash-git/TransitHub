@@ -1,22 +1,12 @@
 stream {
-    map $ssl_preread_server_name $upstream_backend {
-        ${REALITY_DOMAIN} reality_backend;
-${MTPROXY_STREAM_MAP_BLOCK}
-        default panel_https_backend;
-    }
-
-    upstream reality_backend {
-        server xui:8443;
-    }
-${MTPROXY_STREAM_UPSTREAM_BLOCK}
-
-    upstream panel_https_backend {
-        server 127.0.0.1:9443;
-    }
+${STREAM_ROUTING_BLOCK}
 
     server {
         listen 443 reuseport;
         proxy_pass $upstream_backend;
+        proxy_protocol on;
         ssl_preread on;
     }
+
+${STREAM_INTERNAL_SERVER_BLOCK}
 }

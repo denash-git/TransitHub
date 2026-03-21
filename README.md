@@ -1,8 +1,16 @@
 # TransitHub v2
 
-Быстрая установка proxy platform на чистую VPS с Debian 12 или Debian 13.
+TransitHub v2 разворачивает proxy platform на чистой VPS с Debian 12 или Debian 13.
 
-## Быстрый старт
+## Что потребуется
+
+- Debian 12 или Debian 13
+- доступ `root` или пользователь с `sudo`
+- свободные порты `80/tcp` и `443/tcp`
+- домен панели, уже направленный на VPS
+- если включается Telegram-прокси, его домен тоже должен резолвиться на VPS
+
+## Быстрая установка
 
 Одной строкой:
 
@@ -10,44 +18,47 @@
 sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
 ```
 
-Тестовый прогон без production rate limit Let's Encrypt:
+Или обычным clone-сценарием:
+
+```bash
+apt-get update
+apt-get install -y git
+git clone https://github.com/denash-git/TransitHub.git /root/TransitHub
+cd /root/TransitHub
+bash install.sh
+```
+
+Если `install.sh` запущен не от `root`, скрипт сам попробует перезапуститься через `sudo`.
+
+## Что спросит установщик
+
+- `Main domain`
+  Основной домен панели, клиентской страницы и подписок.
+- `REALITY domain`
+  Домен для REALITY.
+- `Telegram proxy domain`
+  Домен Telegram-прокси. Если ввести `-`, Telegram-прокси не будет поднят.
+- `Timezone`
+  Таймзона контейнеров. По умолчанию берётся текущая таймзона VPS.
+
+## Что делает установка
+
+- выполняет preflight-проверки хоста
+- ставит системные пакеты, Docker и Compose
+- настраивает `ufw`
+- выпускает TLS-сертификат Let's Encrypt
+- настраивает автоматическое продление сертификата через `systemd timer`
+- генерирует runtime-конфиги
+- поднимает `nginx`, `xui`, `conv` и опционально Telegram-прокси
+- настраивает `3x-ui` и базовые inbound'ы
+
+## Полезно знать
+
+- по умолчанию используется боевой Let's Encrypt сертификат
+- для тестового сертификата можно запустить:
 
 ```bash
 CERTBOT_STAGING=true sudo bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
 ```
 
-Или обычным clone-сценарием:
-
-Можно запускать:
-
-- от `root`
-- от пользователя с `sudo`
-
-Если `install.sh` запущен не от `root`, он сам попробует перезапуститься через `sudo`.
-
-```bash
-apt-get update
-apt-get install -y git
-git clone https://github.com/denash-git/TransitHub.git ~/TransitHub
-cd ~/TransitHub
-bash install.sh
-```
-
-## Что делает установщик
-
-- спрашивает основной домен, REALITY-домен, опциональный MTProxy TLS domain и timezone
-- ставит системные зависимости
-- поднимает Docker и Compose
-- настраивает `ufw`
-- получает TLS-сертификат через `certbot`
-- включает автоматическое продление TLS-сертификата через `systemd timer`
-- поддерживает `CERTBOT_STAGING=true` для безопасных тестовых прогонов
-- генерирует `instance.env`
-- рендерит nginx, клиентскую страницу и fake-site
-- поднимает `xui`, `conv`, `nginx` и опционально `mtproxy`
-- настраивает панель `3x-ui` и базовые inbound'ы
-- после успешной установки удаляет install-time файлы с VPS
-
-## Полная документация
-
-[docs/README.md](docs/README.md)
+- если время на VPS не синхронизировано, установщик покажет предупреждение, но продолжит работу

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 
-from .mtproxy import enabled as mtproxy_enabled
+from .tgproxy import enabled as tgproxy_enabled
 from . import paths
 
 
@@ -21,20 +21,74 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
         if context.get("ENABLE_EXTENSIONS", "true").strip().lower() == "true"
         else ""
     )
-    render_context["MTPROXY_STREAM_MAP_BLOCK"] = (
-        f"        {context['MTPROXY_TLS_DOMAIN']} mtproxy_backend;"
-        if mtproxy_enabled(context)
-        else ""
+
+    stream_routes = [
+        "    map $ssl_preread_server_name $upstream_backend {\n",
+        f"        {context['REALITY_DOMAIN']} reality_ingress_backend;\n",
+    ]
+    if tgproxy_enabled(context):
+        stream_routes.append(f"        {context['TGPROXY_FAKETLS_DOMAIN']} tgproxy_backend;\n")
+    stream_routes.extend(
+        [
+            "        default panel_ingress_backend;\n",
+            "    }\n\n",
+            "    upstream reality_ingress_backend {\n",
+            f"        server 127.0.0.1:{context.get('STREAM_REALITY_PORT', '9447')};\n",
+            "    }\n\n",
+            "    upstream panel_ingress_backend {\n",
+            f"        server 127.0.0.1:{context.get('STREAM_PANEL_PORT', '9446')};\n",
+            "    }\n\n",
+        ]
     )
-    render_context["MTPROXY_STREAM_UPSTREAM_BLOCK"] = (
-        (
-            "    upstream mtproxy_backend {\n"
-            f"        server mtproxy:{context.get('MTPROXY_PORT', '3443')};\n"
-            "    }"
+    stream_routes.extend(
+        [
+            "    upstream reality_backend {\n",
+            "        server xui:8443;\n",
+            "    }\n\n",
+            "    upstream panel_https_backend {\n",
+            "        server 127.0.0.1:9443;\n",
+            "    }\n\n",
+        ]
+    )
+    if tgproxy_enabled(context):
+        stream_routes.extend(
+            [
+                "    upstream tgproxy_backend {\n",
+                f"        server tgproxy:{context.get('TGPROXY_PORT', '3128')};\n",
+                "    }\n\n",
+            ]
         )
-        if mtproxy_enabled(context)
-        else ""
-    )
+    render_context["STREAM_ROUTING_BLOCK"] = "".join(stream_routes).rstrip()
+
+    stream_internal_servers = [
+        "    server {\n",
+        f"        listen 127.0.0.1:{context.get('STREAM_REALITY_PORT', '9447')} proxy_protocol;\n",
+        "        proxy_pass reality_backend;\n",
+        "    }\n\n",
+        "    server {\n",
+        f"        listen 127.0.0.1:{context.get('STREAM_PANEL_PORT', '9446')} proxy_protocol;\n",
+        "        proxy_pass panel_https_backend;\n",
+        "    }\n",
+    ]
+    render_context["STREAM_INTERNAL_SERVER_BLOCK"] = "".join(stream_internal_servers).rstrip()
+
+    render_context["TGPROXY_CLOAK_SERVER_BLOCK"] = ""
+    if tgproxy_enabled(context):
+        render_context["TGPROXY_CLOAK_SERVER_BLOCK"] = (
+            "\nserver {\n"
+            f"    listen {context.get('TGPROXY_CLOAK_PORT', '9444')} ssl;\n"
+            "    http2 on;\n"
+            f"    server_name {context['TGPROXY_FAKETLS_DOMAIN']};\n"
+            "    port_in_redirect off;\n\n"
+            f"    ssl_certificate {context['CERT_LIVE_DIR']}/fullchain.pem;\n"
+            f"    ssl_certificate_key {context['CERT_LIVE_DIR']}/privkey.pem;\n\n"
+            "    root /srv/fakesite;\n"
+            "    index index.html;\n\n"
+            "    location / {\n"
+            "        try_files $uri $uri/ /index.html;\n"
+            "    }\n"
+            "}\n"
+        )
 
     nginx_templates = {
         "nginx.conf.template": paths.SERVICE_NGINX_CONFIG_DIR / "nginx.conf",
@@ -59,5 +113,11 @@ def render_runtime_files(context: dict[str, str]) -> list[Path]:
     fake_site_dest = paths.SERVICE_FAKE_SITE_DIR / "index.html"
     render_template(fake_site_src, fake_site_dest, context)
     rendered_files.append(fake_site_dest)
+
+    if tgproxy_enabled(context):
+        tgproxy_src = paths.TEMPLATES_TGPROXY_DIR / "config.toml.template"
+        tgproxy_dest = paths.SERVICE_TGPROXY_CONFIG_PATH
+        render_template(tgproxy_src, tgproxy_dest, context)
+        rendered_files.append(tgproxy_dest)
 
     return rendered_files

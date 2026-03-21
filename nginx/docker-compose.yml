@@ -19,9 +19,14 @@ services:
       - ./web/fake_site:/srv/fakesite:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
-      - proxy-net
+      proxy-net:
+      tgproxy-loop-net:
+        ipv4_address: ${TGPROXY_LOOP_NGINX_IP:-10.251.79.10}
 
 networks:
   proxy-net:
     external: true
     name: proxy-net
+  tgproxy-loop-net:
+    external: true
+    name: ${TGPROXY_LOOP_NETWORK:-tgproxy-loop-net}

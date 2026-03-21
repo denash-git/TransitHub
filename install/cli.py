@@ -14,8 +14,8 @@ import time
 from .certbot import CertbotError
 from .certbot import certificate_status
 from .certbot import ensure_certificate
-from .mtproxy import enabled as mtproxy_enabled
-from .mtproxy import tg_link as mtproxy_tg_link
+from .tgproxy import enabled as tgproxy_enabled
+from .tgproxy import tg_link as tgproxy_tg_link
 from . import paths
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +47,7 @@ PRUNE_RUNTIME_DIRS = [
 TOTAL_STEPS = 10
 BLUE = "\033[1;34m"
 GREEN = "\033[1;32m"
+RED = "\033[1;31m"
 RESET = "\033[0m"
 
 
@@ -99,13 +100,13 @@ def run_install() -> int:
     run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
 
     step(4, "Create project layout")
-    run([str(python), "-m", "install", "ensure-layout"])
+    run([str(python), "-m", "install.project", "ensure-layout"])
 
     step(5, "Prepare host dependencies and firewall")
-    run([str(python), "-m", "install", "prepare-host"], stream_output=True)
+    run([str(python), "-m", "install.project", "prepare-host"], stream_output=True)
 
     step(6, "Initialize instance settings")
-    init_command = [str(python), "-m", "install", "init"]
+    init_command = [str(python), "-m", "install.project", "init"]
     if args.non_interactive:
         init_command.append("--non-interactive")
     for key, value in overrides.items():
@@ -117,21 +118,21 @@ def run_install() -> int:
     step(7, "Issue or reuse TLS certificate")
     note(f"Resolve main domain {values['DOMAIN']}")
     resolve_domain_or_raise(values["DOMAIN"])
-    resolve_mtproxy_tls_domain(values)
-    cert_result = issue_certificate(values["DOMAIN"], values.get("CERTBOT_EMAIL", ""))
+    resolve_tgproxy_domains(values)
+    cert_result = issue_certificate(values)
     cert_dir = cert_result["cert_dir"]
     if cert_dir and cert_dir != values.get("CERT_LIVE_DIR", ""):
         note(f"Use certificate path {cert_dir}")
-        run([str(python), "-m", "install", "reconfigure", "--set", f"CERT_LIVE_DIR={cert_dir}"])
+        run([str(python), "-m", "install.project", "reconfigure", "--set", f"CERT_LIVE_DIR={cert_dir}"])
         values = load_instance_env(str(python))
         enabled_services = runtime_services(values)
 
     step(8, "Start core containers")
     cleanup_previous_stack()
-    note("Create or reuse external Docker network proxy-net")
-    ensure_proxy_network()
+    note("Create or reuse external Docker networks proxy-net and tgproxy-loop-net")
+    ensure_runtime_networks(values)
     note(f"Start {', '.join(enabled_services)} containers")
-    note("First run may take a few minutes while Docker pulls images and builds MTProxy")
+    note("First run may take a few minutes while Docker pulls images")
     run(
         compose_up_command(values, *enabled_services),
         heartbeat_message="Still working: Docker is preparing core containers",
@@ -139,12 +140,12 @@ def run_install() -> int:
     note("Wait for xui service startup")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
-    if mtproxy_enabled(values):
-        wait_for_service_ready("mtproxy")
+    if tgproxy_enabled(values):
+        wait_for_service_ready("tgproxy")
     wait_for_xui_db()
 
     step(9, "Seed panel settings and inbounds")
-    run([str(python), "-m", "install", "seed-xui-db"])
+    run([str(python), "-m", "install.project", "seed-xui-db"])
 
     step(10, "Start full stack and finalize deployment")
     note("Start all runtime services")
@@ -152,12 +153,12 @@ def run_install() -> int:
         compose_up_command(values, "--force-recreate", "--remove-orphans"),
         heartbeat_message="Still working: Docker is applying the final stack update",
     )
-    note("Wait for nginx, xui, conv, and optional mtproxy services")
+    note("Wait for nginx, xui, conv, and optional Telegram proxy services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
-    if mtproxy_enabled(values):
-        wait_for_service_ready("mtproxy")
+    if tgproxy_enabled(values):
+        wait_for_service_ready("tgproxy")
     note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
     prune_deployed_tree()
@@ -172,15 +173,16 @@ def preflight(overrides: dict[str, str]) -> None:
     validate_supported_os()
     require_command("apt-get", "apt-get is not available. This installer supports Debian 12+ only.")
     validate_apt_access()
+    validate_time_sync_status()
     validate_port_available(80)
     validate_port_available(443)
     validate_proxy_network_state()
     domain = overrides.get("DOMAIN", "").strip()
     if domain and domain != "example.com":
         resolve_domain_or_raise(domain)
-    mtproxy_tls_domain = overrides.get("MTPROXY_TLS_DOMAIN", "").strip()
-    if mtproxy_tls_domain:
-        resolve_domain_or_raise(mtproxy_tls_domain)
+    tgproxy_public_host = overrides.get("TGPROXY_PUBLIC_HOST", "").strip()
+    if tgproxy_public_host:
+        resolve_domain_or_raise(tgproxy_public_host, "Telegram proxy domain")
 
 
 def require_root() -> None:
@@ -230,6 +232,58 @@ def validate_apt_access() -> None:
     )
     if completed.returncode != 0:
         raise InstallerError("apt-get is present but not working correctly on this host.")
+
+
+def validate_time_sync_status() -> None:
+    if shutil.which("timedatectl") is None:
+        warn(
+            "Could not verify host time synchronization because `timedatectl` is unavailable. "
+            "Telegram proxy may reject clients if VPS time drifts."
+        )
+        return
+
+    completed = subprocess.run(
+        [
+            "timedatectl",
+            "show",
+            "--property=SystemClockSynchronized",
+            "--property=NTPSynchronized",
+            "--property=NTP",
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        warn(
+            "Could not verify host time synchronization via `timedatectl`. "
+            "Telegram proxy may reject clients if VPS time drifts."
+        )
+        return
+
+    properties: dict[str, str] = {}
+    for raw_line in completed.stdout.splitlines():
+        line = raw_line.strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        properties[key] = value.strip().lower()
+
+    clock_synced = properties.get("SystemClockSynchronized") == "yes" or properties.get("NTPSynchronized") == "yes"
+    ntp_enabled = properties.get("NTP") == "yes"
+    if clock_synced and ntp_enabled:
+        return
+
+    details = (
+        f"SystemClockSynchronized={properties.get('SystemClockSynchronized', 'unknown')}, "
+        f"NTPSynchronized={properties.get('NTPSynchronized', 'unknown')}, "
+        f"NTP={properties.get('NTP', 'unknown')}"
+    )
+    warn(
+        "Host time synchronization is not confirmed. "
+        f"{details}. Installation will continue, but Telegram proxy may fail until NTP is active and the clock is synced."
+    )
 
 
 def validate_port_available(port: int) -> None:
@@ -282,10 +336,10 @@ def resolve_domain_or_raise(domain: str, label: str = "Main domain") -> None:
         ) from exc
 
 
-def resolve_mtproxy_tls_domain(values: dict[str, str]) -> None:
-    if not mtproxy_enabled(values):
+def resolve_tgproxy_domains(values: dict[str, str]) -> None:
+    if not tgproxy_enabled(values):
         return
-    resolve_domain_or_raise(values["MTPROXY_TLS_DOMAIN"], "MTProxy TLS domain")
+    resolve_domain_or_raise(values["TGPROXY_PUBLIC_HOST"], "Telegram proxy domain")
 
 
 def ensure_venv() -> None:
@@ -399,11 +453,18 @@ def load_instance_env(python: str) -> dict[str, str]:
     return json.loads(completed.stdout)
 
 
-def issue_certificate(domain: str, email: str) -> dict[str, object]:
-    values = load_instance_env(str(venv_python()))
+def certificate_request_domains(values: dict[str, str]) -> list[str]:
+    domains = [values["DOMAIN"]]
+    if tgproxy_enabled(values):
+        domains.append(values["TGPROXY_PUBLIC_HOST"])
+    return domains
+
+
+def issue_certificate(values: dict[str, str]) -> dict[str, object]:
     staging = values.get("CERTBOT_STAGING", "false").strip().lower() == "true"
+    domains = certificate_request_domains(values)
     try:
-        return ensure_certificate(domain, email, staging=staging)
+        return ensure_certificate(domains, values.get("CERTBOT_EMAIL", ""), staging=staging)
     except CertbotError as exc:
         raise InstallerError(str(exc)) from exc
 
@@ -442,18 +503,40 @@ def cleanup_previous_stack(preflight: bool = False) -> None:
         run(["docker", "rm", "-f", *container_ids], stream_output=True)
 
 
-def ensure_proxy_network() -> None:
-    network_name = "proxy-net"
+def ensure_runtime_networks(values: dict[str, str]) -> None:
+    ensure_external_bridge_network("proxy-net")
+    ensure_external_bridge_network(
+        values.get("TGPROXY_LOOP_NETWORK", "tgproxy-loop-net"),
+        values.get("TGPROXY_LOOP_SUBNET", "10.251.79.0/24"),
+    )
+
+
+def ensure_external_bridge_network(name: str, subnet: str | None = None) -> None:
     completed = subprocess.run(
-        ["docker", "network", "inspect", network_name],
+        ["docker", "network", "inspect", name, "--format", "{{json .}}"],
         cwd=PROJECT_ROOT,
         check=False,
         capture_output=True,
         text=True,
     )
     if completed.returncode == 0:
+        details = json.loads(completed.stdout)
+        if details.get("Driver") != "bridge" or details.get("Internal", False):
+            raise InstallerError(f"Docker network `{name}` exists, but it is not a usable external bridge network.")
+        if subnet:
+            configs = details.get("IPAM", {}).get("Config") or []
+            current_subnets = {config.get("Subnet", "") for config in configs if config.get("Subnet")}
+            if current_subnets and subnet not in current_subnets:
+                raise InstallerError(
+                    f"Docker network `{name}` already exists with unexpected subnet {', '.join(sorted(current_subnets))}."
+                )
         return
-    run(["docker", "network", "create", network_name], stream_output=True)
+
+    command = ["docker", "network", "create", "--driver", "bridge"]
+    if subnet:
+        command.extend(["--subnet", subnet])
+    command.append(name)
+    run(command, stream_output=True)
 
 
 def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:
@@ -471,8 +554,6 @@ def wait_for_service_ready(service: str, timeout_seconds: int = 90) -> None:
         status = state.get("Status")
         health = (state.get("Health") or {}).get("Status")
         if health == "healthy":
-            return
-        if service == "mtproxy" and status == "running":
             return
         if health is None and status == "running":
             return
@@ -565,15 +646,15 @@ def compose_files(values: dict[str, str]) -> list[Path]:
         paths.SERVICE_XUI_COMPOSE_PATH,
         paths.SERVICE_SUBCONVERTER_COMPOSE_PATH,
     ]
-    if mtproxy_enabled(values):
-        files.append(paths.SERVICE_MTPROXY_COMPOSE_PATH)
+    if tgproxy_enabled(values):
+        files.append(paths.SERVICE_TGPROXY_COMPOSE_PATH)
     return files
 
 
 def runtime_services(values: dict[str, str]) -> list[str]:
     services = ["xui", "conv"]
-    if mtproxy_enabled(values):
-        services.append("mtproxy")
+    if tgproxy_enabled(values):
+        services.append("tgproxy")
     return services
 
 
@@ -628,6 +709,10 @@ def note(message: str) -> None:
     print(f"  - {message}")
 
 
+def warn(message: str) -> None:
+    print(f"{RED}  ! {message}{RESET}")
+
+
 def print_summary(values: dict[str, str]) -> None:
     panel_url = f"https://{values['DOMAIN']}/{values['PANEL_PATH']}/"
     sub_url = f"https://{values['DOMAIN']}/{values['SUB_PATH']}/first"
@@ -653,9 +738,10 @@ def print_summary(values: dict[str, str]) -> None:
         lines.append("TLS Cert     : not found")
     if staging:
         lines.append("TLS Mode     : Let's Encrypt staging")
-    if mtproxy_enabled(values):
-        lines.append(f"MTProxy URL  : {mtproxy_tg_link(values)}")
-        lines.append(f"MTProxy SNI  : {values['MTPROXY_TLS_DOMAIN']}")
+    if tgproxy_enabled(values):
+        lines.append(f"TG Proxy URL : {tgproxy_tg_link(values)}")
+        lines.append(f"TG Domain    : {values['TGPROXY_PUBLIC_HOST']}")
+        lines.append(f"FakeTLS SNI  : {values['TGPROXY_FAKETLS_DOMAIN']}")
     width = max(len(line) for line in lines) + 2
     print("\n" * 2, end="")
     print("Connection details")
