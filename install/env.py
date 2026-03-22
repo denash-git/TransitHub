@@ -19,6 +19,7 @@ PINNED_RUNTIME_IMAGES = {
     "NGINX_IMAGE": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
     "SUBCONVERTER_IMAGE": "tindy2013/subconverter@sha256:52191601780c1e6427e2239e330a7e1147ff5a684a204ca9cc75b4ada2d7fa75",
     "TGPROXY_IMAGE": "nineseconds/mtg@sha256:32e3b3e75ff1931c7b7a3d63557f0a1dd1f7963c08c97bacfa28f3267827ce0f",
+    "NETBIRD_IMAGE": "netbirdio/netbird@sha256:1f5fe9b07fcf424315e1b73a1921e0fee10560304b338f8de2e9c2a5998eb431",
 }
 
 LEGACY_RUNTIME_IMAGE_REFS = {
@@ -26,6 +27,7 @@ LEGACY_RUNTIME_IMAGE_REFS = {
     "NGINX_IMAGE": {"nginx:1.27-alpine"},
     "SUBCONVERTER_IMAGE": {"tindy2013/subconverter:latest"},
     "TGPROXY_IMAGE": {"nineseconds/mtg:2"},
+    "NETBIRD_IMAGE": {"netbirdio/netbird:latest"},
 }
 
 
@@ -78,9 +80,11 @@ ENV_FIELDS = [
         "Pinned subscription converter image digest.",
     ),
     EnvField("TGPROXY_IMAGE", PINNED_RUNTIME_IMAGES["TGPROXY_IMAGE"], True, "Pinned Telegram proxy image digest."),
+    EnvField("NETBIRD_IMAGE", PINNED_RUNTIME_IMAGES["NETBIRD_IMAGE"], True, "Pinned NetBird image digest."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
     EnvField("ENABLE_TGPROXY", "false", True, "Whether to run the Telegram proxy service."),
+    EnvField("ENABLE_NETBIRD", "false", True, "Whether to run the NetBird client container."),
     EnvField("ENABLE_EXTENSIONS", "true", True, "Whether nginx loads extension includes."),
     EnvField("FAKE_SITE_TEMPLATE", "signal-wire", True, "Selected fake-site template."),
     EnvField("WEB_SUB_TEMPLATE", "clean-card", True, "Selected web subscription template."),
@@ -93,6 +97,10 @@ ENV_FIELDS = [
     EnvField("TGPROXY_LOOP_SUBNET", "10.251.79.0/24", False, "Dedicated Docker subnet used between nginx and tgproxy."),
     EnvField("TGPROXY_LOOP_NGINX_IP", "10.251.79.10", False, "Static nginx IP on the tgproxy loop network."),
     EnvField("TGPROXY_LOOP_TGPROXY_IP", "10.251.79.11", False, "Static tgproxy IP on the tgproxy loop network."),
+    EnvField("NETBIRD_SETUP_KEY", "", True, "Optional NetBird setup key used to join an existing infrastructure."),
+    EnvField("NETBIRD_MANAGEMENT_URL", "", True, "Optional NetBird management URL in https:// format."),
+    EnvField("NETBIRD_HOSTNAME", "", False, "Derived hostname passed to the NetBird container."),
+    EnvField("NETBIRD_LOG_LEVEL", "info", True, "NetBird container log level."),
     EnvField("CERTBOT_EMAIL", "", True, "Optional Let's Encrypt registration email."),
     EnvField("CERTBOT_STAGING", "false", True, "Use Let's Encrypt staging instead of production."),
     EnvField("CERT_LIVE_DIR", "/etc/letsencrypt/live/example.com", True, "Host certificate directory mounted into runtime."),
@@ -142,6 +150,8 @@ PROMPTED_FIELDS = [
     "DOMAIN",
     "REALITY_DOMAIN",
     "TGPROXY_PUBLIC_HOST",
+    "NETBIRD_SETUP_KEY",
+    "NETBIRD_MANAGEMENT_URL",
     "TZ",
     "WEB_SUB_TEMPLATE",
 ]
@@ -150,6 +160,8 @@ FIELD_PROMPTS = {
     "DOMAIN": "Main domain",
     "REALITY_DOMAIN": "REALITY domain",
     "TGPROXY_PUBLIC_HOST": "Telegram proxy domain",
+    "NETBIRD_SETUP_KEY": "NetBird setup key",
+    "NETBIRD_MANAGEMENT_URL": "NetBird management URL",
     "TZ": "Timezone",
     "WEB_SUB_TEMPLATE": "Web subscription template",
 }
@@ -268,6 +280,7 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
         fill_if_empty(generated, "TGPROXY_SECRET", generate_tgproxy_secret(generated.get("TGPROXY_FAKETLS_DOMAIN", "")))
     else:
         generated["TGPROXY_SECRET"] = ""
+    fill_if_empty(generated, "NETBIRD_HOSTNAME", f"{generated.get('INSTANCE_NAME', 'transithub').strip() or 'transithub'}-netbird")
     return generated
 
 
@@ -323,6 +336,12 @@ def sync_derived_fields(values: dict[str, str]) -> dict[str, str]:
 
     synced["TGPROXY_FAKETLS_DOMAIN"] = tgproxy_public_host
     synced["ENABLE_TGPROXY"] = "true" if tgproxy_public_host else "false"
+    if synced.get("NETBIRD_HOSTNAME", "").strip() in {"", "transithub-netbird"}:
+        instance_name = synced.get("INSTANCE_NAME", "").strip() or "transithub"
+        synced["NETBIRD_HOSTNAME"] = f"{instance_name}-netbird"
+    netbird_setup_key = synced.get("NETBIRD_SETUP_KEY", "").strip()
+    netbird_management_url = synced.get("NETBIRD_MANAGEMENT_URL", "").strip()
+    synced["ENABLE_NETBIRD"] = "true" if netbird_setup_key and netbird_management_url else "false"
     synced["FAKE_SITE_TEMPLATE"] = pick_fake_site_template(synced.get("FAKE_SITE_TEMPLATE", ""))
     return synced
 

@@ -21,6 +21,7 @@ REQUIRED_FILES = [
     PROJECT_ROOT / "xui" / "docker-compose.yml",
     PROJECT_ROOT / "subconverter" / "docker-compose.yml",
     PROJECT_ROOT / "tgproxy" / "docker-compose.yml",
+    PROJECT_ROOT / "netbird" / "docker-compose.yml",
     PROJECT_ROOT / "instance.env",
 ]
 

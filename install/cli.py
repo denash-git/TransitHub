@@ -14,6 +14,8 @@ import time
 from .certbot import CertbotError
 from .certbot import certificate_status
 from .certbot import ensure_certificate
+from .host import ensure_netbird_host_ready
+from .netbird import enabled as netbird_enabled
 from .tgproxy import enabled as tgproxy_enabled
 from .tgproxy import tg_link as tgproxy_tg_link
 from . import paths
@@ -113,6 +115,9 @@ def run_install() -> int:
         init_command.extend(["--set", f"{key}={value}"])
     run(init_command)
     values = load_instance_env(str(python))
+    if netbird_enabled(values):
+        note("Configure host routing and firewall prerequisites for NetBird")
+        ensure_netbird_host_ready()
     enabled_services = runtime_services(values)
 
     step(7, "Issue or reuse TLS certificate")
@@ -142,6 +147,8 @@ def run_install() -> int:
     wait_for_service_ready("conv")
     if tgproxy_enabled(values):
         wait_for_service_ready("tgproxy")
+    if netbird_enabled(values):
+        wait_for_service_ready("netbird")
     wait_for_xui_db()
 
     step(9, "Seed panel settings and inbounds")
@@ -153,12 +160,14 @@ def run_install() -> int:
         compose_up_command(values, "--force-recreate", "--remove-orphans"),
         heartbeat_message="Still working: Docker is applying the final stack update",
     )
-    note("Wait for nginx, xui, conv, and optional Telegram proxy services")
+    note("Wait for nginx, xui, conv, and optional tgproxy/netbird services")
     wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
     if tgproxy_enabled(values):
         wait_for_service_ready("tgproxy")
+    if netbird_enabled(values):
+        wait_for_service_ready("netbird")
     note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
     prune_deployed_tree()
@@ -648,6 +657,8 @@ def compose_files(values: dict[str, str]) -> list[Path]:
     ]
     if tgproxy_enabled(values):
         files.append(paths.SERVICE_TGPROXY_COMPOSE_PATH)
+    if netbird_enabled(values):
+        files.append(paths.SERVICE_NETBIRD_COMPOSE_PATH)
     return files
 
 
@@ -655,6 +666,8 @@ def runtime_services(values: dict[str, str]) -> list[str]:
     services = ["xui", "conv"]
     if tgproxy_enabled(values):
         services.append("tgproxy")
+    if netbird_enabled(values):
+        services.append("netbird")
     return services
 
 
@@ -742,6 +755,9 @@ def print_summary(values: dict[str, str]) -> None:
         lines.append(f"TG Proxy URL : {tgproxy_tg_link(values)}")
         lines.append(f"TG Domain    : {values['TGPROXY_PUBLIC_HOST']}")
         lines.append(f"FakeTLS SNI  : {values['TGPROXY_FAKETLS_DOMAIN']}")
+    if netbird_enabled(values):
+        lines.append(f"NetBird URL  : {values['NETBIRD_MANAGEMENT_URL']}")
+        lines.append(f"NetBird Peer : {values['NETBIRD_HOSTNAME']}")
     width = max(len(line) for line in lines) + 2
     print("\n" * 2, end="")
     print("Connection details")

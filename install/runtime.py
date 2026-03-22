@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 
 from .certbot import certificate_status
+from .netbird import enabled as netbird_enabled
+from .netbird import validate as validate_netbird
 from .tgproxy import enabled as tgproxy_enabled
 from .tgproxy import tg_link as tgproxy_tg_link
 from .tgproxy import validate as validate_tgproxy
@@ -103,6 +105,7 @@ def validate_templates(values: dict[str, str]) -> None:
     if missing:
         raise FileNotFoundError("Missing templates:\n" + "\n".join(missing))
     validate_tgproxy(values)
+    validate_netbird(values)
 
 
 def validate_cert_path(values: dict[str, str]) -> list[str]:
@@ -134,6 +137,17 @@ def prompt_for_init(values: dict[str, str]) -> dict[str, str]:
                 prompted["TGPROXY_PUBLIC_HOST"] = ""
                 prompted["TGPROXY_SECRET"] = ""
                 continue
+        elif key == "NETBIRD_SETUP_KEY":
+            entered = input(f"{label} [{current or 'disabled'}]: ").strip()
+            if entered == "-":
+                prompted["NETBIRD_SETUP_KEY"] = ""
+                prompted["NETBIRD_MANAGEMENT_URL"] = ""
+                continue
+        elif key == "NETBIRD_MANAGEMENT_URL":
+            if not prompted.get("NETBIRD_SETUP_KEY", "").strip():
+                prompted["NETBIRD_MANAGEMENT_URL"] = ""
+                continue
+            entered = input(f"{label} [{current or 'https://'}]: ").strip()
         else:
             entered = input(f"{label} [{current}]: ").strip()
         if entered:
@@ -148,6 +162,10 @@ def apply_overrides(values: dict[str, str], overrides: dict[str, str] | None) ->
         if "TGPROXY_PUBLIC_HOST" in overrides and "TGPROXY_SECRET" not in overrides:
             merged["TGPROXY_SECRET"] = ""
             merged["TGPROXY_FAKETLS_DOMAIN"] = ""
+        if "NETBIRD_SETUP_KEY" in overrides and not overrides.get("NETBIRD_SETUP_KEY", "").strip():
+            merged["NETBIRD_MANAGEMENT_URL"] = ""
+        if "NETBIRD_MANAGEMENT_URL" in overrides and not overrides.get("NETBIRD_MANAGEMENT_URL", "").strip():
+            merged["NETBIRD_SETUP_KEY"] = ""
     return sync_derived_fields(merged)
 
 
@@ -199,6 +217,9 @@ def status() -> dict[str, object]:
         "tgproxy_public_host": values.get("TGPROXY_PUBLIC_HOST", ""),
         "tgproxy_faketls_domain": values.get("TGPROXY_FAKETLS_DOMAIN", ""),
         "tgproxy_link": tgproxy_tg_link(values),
+        "netbird_enabled": netbird_enabled(values),
+        "netbird_management_url": values.get("NETBIRD_MANAGEMENT_URL", ""),
+        "netbird_hostname": values.get("NETBIRD_HOSTNAME", ""),
         "panel_url": panel_url(values),
         "subscription_url": subscription_url(values),
         "web_url": web_url(values),

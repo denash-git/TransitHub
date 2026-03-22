@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  netbird:
+    image: ${NETBIRD_IMAGE:-netbirdio/netbird@sha256:1f5fe9b07fcf424315e1b73a1921e0fee10560304b338f8de2e9c2a5998eb431}
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RESOURCE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      NB_SETUP_KEY: ${NETBIRD_SETUP_KEY}
+      NB_MANAGEMENT_URL: ${NETBIRD_MANAGEMENT_URL}
+      NB_LOG_LEVEL: ${NETBIRD_LOG_LEVEL:-info}
+    hostname: ${NETBIRD_HOSTNAME:-transithub-netbird}
+    volumes:
+      - ./netbird/data:/var/lib/netbird

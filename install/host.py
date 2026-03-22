@@ -44,6 +44,7 @@ TRANSITHUB_RENEW_SERVICE = Path("/etc/systemd/system/transithub-certbot-renew.se
 TRANSITHUB_RENEW_TIMER = Path("/etc/systemd/system/transithub-certbot-renew.timer")
 DOCKER_DAEMON_DIR = Path("/etc/docker")
 DOCKER_DAEMON_CONFIG = DOCKER_DAEMON_DIR / "daemon.json"
+TRANSITHUB_NETBIRD_SYSCTL = Path("/etc/sysctl.d/99-transithub-netbird.conf")
 
 
 def log(message: str) -> None:
@@ -101,6 +102,24 @@ def restart_docker_service() -> None:
 def ufw_allows(port: str) -> bool:
     result = subprocess.run(["ufw", "status"], capture_output=True, text=True, check=True)
     return port in result.stdout
+
+
+def detect_default_network_interface() -> str:
+    completed = subprocess.run(
+        ["ip", "route", "show", "default"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return ""
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if "dev" in parts:
+            index = parts.index("dev")
+            if index + 1 < len(parts):
+                return parts[index + 1].strip()
+    return ""
 
 
 def docker_compose_available() -> bool:
@@ -274,6 +293,27 @@ def ensure_certbot_renewal() -> None:
     )
     run(["systemctl", "daemon-reload"])
     run(["systemctl", "enable", "--now", TRANSITHUB_RENEW_TIMER.name])
+
+
+def ensure_netbird_host_ready() -> dict[str, str]:
+    log("Enable IPv4 forwarding for NetBird routing and exit-node capability")
+    TRANSITHUB_NETBIRD_SYSCTL.write_text("net.ipv4.ip_forward=1\n", encoding="utf-8")
+    run(["sysctl", "-p", str(TRANSITHUB_NETBIRD_SYSCTL)])
+
+    log("Allow inbound traffic on NetBird interface wt0")
+    run(["ufw", "allow", "in", "on", "wt0"])
+
+    default_iface = detect_default_network_interface()
+    if default_iface:
+        log(f"Allow routed NetBird traffic from wt0 to {default_iface}")
+        run(["ufw", "route", "allow", "in", "on", "wt0", "out", "on", default_iface])
+    else:
+        log("Skip routed wt0 firewall rule: default egress interface could not be detected")
+
+    return {
+        "netbird_sysctl": str(TRANSITHUB_NETBIRD_SYSCTL),
+        "default_interface": default_iface,
+    }
 
 
 def install_compose_support() -> bool:

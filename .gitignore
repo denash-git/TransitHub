@@ -16,5 +16,7 @@ xui/data/*
 subconverter/data/*
 !subconverter/data/.gitkeep
 tgproxy/config.toml
+netbird/data/*
+!netbird/data/.gitkeep
 install/host/last_prepare.json
 .ssh/
