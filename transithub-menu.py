@@ -153,6 +153,18 @@ def prompt_fixed_length_value(
         error = f"{label} must contain exactly {length} characters. Try again."
 
 
+def credential_updated_lines(label: str, value: str) -> list[str]:
+    emphasized = f"{GREEN}{value}{RESET}"
+    return [
+        f"{label} updated successfully.",
+        "",
+        f"{label}:",
+        emphasized,
+        "",
+        f"{YELLOW}Save this value now. Write it down before leaving this screen.{RESET}",
+    ]
+
+
 def command_works(command: list[str]) -> bool:
     try:
         return subprocess.run(command, check=False, capture_output=True, text=True).returncode == 0
@@ -474,7 +486,7 @@ def change_xui_username(values: dict[str, str]) -> None:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
         update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": new_username})
-        print_block("3x-ui", ["Username updated successfully."], accent=GREEN)
+        print_block("3x-ui Username", credential_updated_lines("Username", new_username), accent=GREEN)
     pause()
 
 
@@ -495,7 +507,7 @@ def change_xui_password(values: dict[str, str]) -> None:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
         update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": new_password})
-        print_block("3x-ui", ["Password updated successfully."], accent=GREEN)
+        print_block("3x-ui Password", credential_updated_lines("Password", new_password), accent=GREEN)
     pause()
 
 
