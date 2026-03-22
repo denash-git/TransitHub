@@ -53,10 +53,28 @@ def main() -> int:
         render_main_menu(values)
         choice = prompt("Select an option")
         if choice == "1":
-            netbird_menu()
+            simple_service_menu(values, title="Nginx", service="nginx", accent=BLUE, enabled=True)
         elif choice == "2":
             xui_menu()
         elif choice == "3":
+            simple_service_menu(
+                values,
+                title="Subconverter",
+                service="conv",
+                accent=BLUE,
+                enabled=bool_env(values.get("ENABLE_SUBCONVERTER")),
+            )
+        elif choice == "4":
+            simple_service_menu(
+                values,
+                title="TGProxy",
+                service="tgproxy",
+                accent=GREEN,
+                enabled=bool_env(values.get("ENABLE_TGPROXY")),
+            )
+        elif choice == "5":
+            netbird_menu()
+        elif choice == "6":
             services_menu()
         elif choice == "0":
             clear_screen()
@@ -265,8 +283,9 @@ def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
 def service_state_line(values: dict[str, str], label: str, service: str, enabled_field: str | None = None) -> str:
     if enabled_field and not bool_env(values.get(enabled_field)):
         return f"{label:<13}: disabled"
-    container = service_container_name(values, service, include_stopped=False)
-    return f"{label:<13}: {status_badge(bool(container), 'running' if container else 'down')}"
+    container = service_container_name(values, service, include_stopped=True)
+    running = service_is_running(container)
+    return f"{label:<13}: {status_badge(running, 'running' if running else 'stopped')}"
 
 
 def render_main_menu(values: dict[str, str]) -> None:
@@ -277,9 +296,12 @@ def render_main_menu(values: dict[str, str]) -> None:
         service_state_line(values, "tgproxy", "tgproxy", enabled_field="ENABLE_TGPROXY"),
         service_state_line(values, "netbird", "netbird", enabled_field="ENABLE_NETBIRD"),
         "",
-        "1. NetBird",
+        "1. Nginx",
         "2. 3x-ui",
-        "3. Services",
+        "3. Subconverter",
+        "4. TGProxy",
+        "5. NetBird",
+        "6. Services",
         "0. Exit",
     ]
     print_block("TransitHub Local Menu", lines, accent=BLUE)
@@ -289,11 +311,11 @@ def netbird_menu() -> None:
     while True:
         values = parse_env(INSTANCE_ENV_PATH)
         enabled = bool_env(values.get("ENABLE_NETBIRD"))
-        container = service_container_name(values, "netbird", include_stopped=False)
+        container = service_container_name(values, "netbird", include_stopped=True)
         if not enabled:
             status = "disabled"
         else:
-            status = status_badge(bool(container), "running" if container else "down")
+            status = status_badge(service_is_running(container), "running" if service_is_running(container) else "stopped")
         lines = [
             f"Container        : {container or 'not running'}",
             f"Status           : {status}",
@@ -303,8 +325,10 @@ def netbird_menu() -> None:
             "1. Show NetBird status",
             "2. Show NetBird logs",
             "3. Reconfigure setup key / management URL",
-            "4. Recreate NetBird container",
-            "5. Disable NetBird",
+            "4. Start NetBird",
+            "5. Stop NetBird",
+            "6. Restart NetBird",
+            "7. Disable NetBird",
             "0. Back",
         ]
         print_block("NetBird", lines, accent=GREEN)
@@ -316,8 +340,12 @@ def netbird_menu() -> None:
         elif choice == "3":
             reconfigure_netbird(values)
         elif choice == "4":
-            restart_service(values, "netbird", always_include_netbird=True)
+            service_start(values, "netbird", "NetBird")
         elif choice == "5":
+            service_stop(values, "netbird", "NetBird")
+        elif choice == "6":
+            service_restart(values, "netbird", "NetBird")
+        elif choice == "7":
             disable_netbird(values)
         elif choice == "0":
             return
@@ -415,18 +443,21 @@ def disable_netbird(values: dict[str, str]) -> None:
 def xui_menu() -> None:
     while True:
         values = parse_env(INSTANCE_ENV_PATH)
-        container = service_container_name(values, "xui", include_stopped=False)
+        container = service_container_name(values, "xui", include_stopped=True)
+        running = service_is_running(container)
         lines = [
             f"Container        : {container or 'not running'}",
-            f"Status           : {status_badge(bool(container), 'running' if container else 'down')}",
+            f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
             f"Panel URL        : {panel_url(values)}",
             "",
             "1. Show stored settings",
             "2. Change username",
             "3. Change password",
             "4. Show x-ui logs",
-            "5. Recreate x-ui container",
-            "6. Open x-ui shell",
+            "5. Start x-ui",
+            "6. Stop x-ui",
+            "7. Restart x-ui",
+            "8. Open x-ui shell",
             "0. Back",
         ]
         print_block("3x-ui", lines, accent=YELLOW)
@@ -440,8 +471,12 @@ def xui_menu() -> None:
         elif choice == "4":
             tail_service_logs(values, "xui")
         elif choice == "5":
-            restart_service(values, "xui")
+            service_start(values, "xui", "x-ui")
         elif choice == "6":
+            service_stop(values, "xui", "x-ui")
+        elif choice == "7":
+            service_restart(values, "xui", "x-ui")
+        elif choice == "8":
             open_xui_shell(values)
         elif choice == "0":
             return
@@ -521,12 +556,94 @@ def open_xui_shell(values: dict[str, str]) -> None:
 
 
 def require_xui_container(values: dict[str, str]) -> str:
-    container = service_container_name(values, "xui", include_stopped=False)
+    container = service_container_name(values, "xui", include_stopped=True)
     if not container:
         print_block("3x-ui", ["xui container is not running."], accent=RED)
         pause()
         return ""
     return container
+
+
+def service_is_running(container_name: str) -> bool:
+    if not container_name:
+        return False
+    completed = run(["docker", "inspect", "-f", "{{.State.Running}}", container_name])
+    return completed.returncode == 0 and completed.stdout.strip().lower() == "true"
+
+
+def service_start(values: dict[str, str], service: str, label: str) -> None:
+    container = service_container_name(values, service, include_stopped=True)
+    if not container:
+        print_block(label, [f"{label} container is not available."], accent=RED)
+        pause()
+        return
+    completed = run(["docker", "start", container])
+    if completed.returncode != 0:
+        print_block(f"{label} Start Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        print_block(label, [f"{label} started successfully."], accent=GREEN)
+    pause()
+
+
+def service_stop(values: dict[str, str], service: str, label: str) -> None:
+    container = service_container_name(values, service, include_stopped=True)
+    if not container:
+        print_block(label, [f"{label} container is not available."], accent=RED)
+        pause()
+        return
+    completed = run(["docker", "stop", container])
+    if completed.returncode != 0:
+        print_block(f"{label} Stop Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        print_block(label, [f"{label} stopped successfully."], accent=GREEN)
+    pause()
+
+
+def service_restart(values: dict[str, str], service: str, label: str) -> None:
+    container = service_container_name(values, service, include_stopped=True)
+    if not container:
+        print_block(label, [f"{label} container is not available."], accent=RED)
+        pause()
+        return
+    completed = run(["docker", "restart", container])
+    if completed.returncode != 0:
+        print_block(f"{label} Restart Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        print_block(label, [f"{label} restarted successfully."], accent=GREEN)
+    pause()
+
+
+def simple_service_menu(values: dict[str, str], title: str, service: str, accent: str, enabled: bool) -> None:
+    while True:
+        current_values = parse_env(INSTANCE_ENV_PATH)
+        container = service_container_name(current_values, service, include_stopped=True)
+        if not enabled:
+            status = "disabled"
+        else:
+            running = service_is_running(container)
+            status = status_badge(running, "running" if running else "stopped")
+        lines = [
+            f"Container        : {container or 'not available'}",
+            f"Status           : {status}",
+            "",
+            "1. Show logs",
+            "2. Start",
+            "3. Stop",
+            "4. Restart",
+            "0. Back",
+        ]
+        print_block(title, lines, accent=accent)
+        choice = prompt("Select an option")
+        if choice == "1":
+            tail_service_logs(current_values, service)
+        elif choice == "2":
+            service_start(current_values, service, title)
+        elif choice == "3":
+            service_stop(current_values, service, title)
+        elif choice == "4":
+            service_restart(current_values, service, title)
+        elif choice == "0":
+            return
 
 
 def services_menu() -> None:
