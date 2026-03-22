@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import bcrypt
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -316,6 +317,66 @@ def xui_db_state() -> dict[str, str]:
     return state
 
 
+def xui_user_record() -> dict[str, object]:
+    if not XUI_DB_PATH.exists():
+        raise FileNotFoundError(f"x-ui database was not found: {XUI_DB_PATH}")
+
+    conn = sqlite3.connect(XUI_DB_PATH)
+    try:
+        cur = conn.cursor()
+        row = cur.execute("SELECT id, username, password FROM users ORDER BY id LIMIT 1").fetchone()
+        if not row:
+            return {"id": None, "username": "", "password_hash": ""}
+        return {
+            "id": int(row[0]),
+            "username": str(row[1] or ""),
+            "password_hash": str(row[2] or ""),
+        }
+    finally:
+        conn.close()
+
+
+def hash_xui_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def update_xui_db_credentials(username: str | None = None, password: str | None = None) -> str:
+    if username is None and password is None:
+        raise ValueError("No x-ui credential changes were requested.")
+
+    current = xui_user_record()
+    target_username = username if username is not None else str(current.get("username") or "")
+    target_password_hash = (
+        hash_xui_password(password)
+        if password is not None
+        else str(current.get("password_hash") or "")
+    )
+
+    if not target_username:
+        raise ValueError("x-ui username can not be empty.")
+    if not target_password_hash:
+        raise ValueError("x-ui password hash can not be empty.")
+
+    conn = sqlite3.connect(XUI_DB_PATH)
+    try:
+        cur = conn.cursor()
+        if current.get("id") is None:
+            cur.execute(
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                (target_username, target_password_hash),
+            )
+        else:
+            cur.execute(
+                "UPDATE users SET username = ?, password = ? WHERE id = ?",
+                (target_username, target_password_hash, int(current["id"])),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return target_username
+
+
 def render_main_menu(values: dict[str, str]) -> None:
     lines = [
         service_state_line(values, "nginx", "nginx"),
@@ -534,7 +595,7 @@ def show_xui_settings(values: dict[str, str]) -> None:
         f"Current username : {db_state.get('username', '-')}",
         f"DB path          : {db_state.get('db_path', '-')}",
     ]
-    print_block("3x-ui Stored Settings", lines, accent=YELLOW)
+    print_block("3x-ui Runtime Settings", lines, accent=YELLOW)
     pause()
 
 
@@ -550,11 +611,18 @@ def change_xui_username(values: dict[str, str]) -> None:
         USERNAME_LENGTH,
         accent=YELLOW,
     )
-    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-username", new_username])
+    try:
+        update_xui_db_credentials(username=new_username)
+        update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": new_username})
+    except Exception as exc:
+        print_block("3x-ui Update Failed", [str(exc)], accent=RED)
+        pause()
+        return
+
+    completed = run(["docker", "restart", container])
     if completed.returncode != 0:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": new_username})
         print_block("3x-ui Username", credential_updated_lines("Username", new_username), accent=GREEN)
     pause()
 
@@ -571,11 +639,18 @@ def change_xui_password(values: dict[str, str]) -> None:
         PASSWORD_LENGTH,
         accent=YELLOW,
     )
-    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-password", new_password])
+    try:
+        update_xui_db_credentials(password=new_password)
+        update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": new_password})
+    except Exception as exc:
+        print_block("3x-ui Update Failed", [str(exc)], accent=RED)
+        pause()
+        return
+
+    completed = run(["docker", "restart", container])
     if completed.returncode != 0:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": new_password})
         print_block("3x-ui Password", credential_updated_lines("Password", new_password), accent=GREEN)
     pause()
 
@@ -632,18 +707,26 @@ def service_stop(values: dict[str, str], service: str, label: str) -> None:
     pause()
 
 
-def service_restart(values: dict[str, str], service: str, label: str) -> None:
+def service_restart(
+    values: dict[str, str],
+    service: str,
+    label: str,
+    pause_after: bool = True,
+) -> subprocess.CompletedProcess[str]:
     container = service_container_name(values, service, include_stopped=True)
     if not container:
         print_block(label, [f"{label} container is not available."], accent=RED)
-        pause()
-        return
+        if pause_after:
+            pause()
+        return subprocess.CompletedProcess(["docker", "restart", service], 1, "", f"{label} container is not available.")
     completed = run(["docker", "restart", container])
     if completed.returncode != 0:
         print_block(f"{label} Restart Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
         print_block(label, [f"{label} restarted successfully."], accent=GREEN)
-    pause()
+    if pause_after:
+        pause()
+    return completed
 
 
 def simple_service_menu(values: dict[str, str], title: str, service: str, accent: str, enabled: bool) -> None:

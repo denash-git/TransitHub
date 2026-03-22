@@ -14,6 +14,7 @@ APT_BASE_PACKAGES = [
     "gnupg",
     "lsb-release",
     "openssl",
+    "python3-bcrypt",
     "python3",
     "python3-venv",
     "python3-pip",
