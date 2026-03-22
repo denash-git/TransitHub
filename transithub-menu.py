@@ -23,6 +23,7 @@ YELLOW = "\033[1;33m"
 RED = "\033[1;31m"
 DIM = "\033[2m"
 RESET = "\033[0m"
+HEADER_WIDTH = 55
 
 
 def main() -> int:
@@ -167,30 +168,17 @@ def status_badge(ok: bool, text: str) -> str:
     return f"{color}{text}{RESET}"
 
 
-def box(title: str, lines: list[str], accent: str = BLUE) -> None:
-    width = max(len(title), *[len(strip_ansi(line)) for line in lines], 28)
-    top = "┏" + "━" * (width + 2) + "┓"
-    mid = "┣" + "━" * (width + 2) + "┫"
-    bottom = "┗" + "━" * (width + 2) + "┛"
-    print(f"{accent}{top}{RESET}")
-    print(f"{accent}┃ {title.ljust(width)} ┃{RESET}")
-    print(f"{accent}{mid}{RESET}")
-    for line in lines:
-        pad = width - len(strip_ansi(line))
-        print(f"{accent}┃{RESET} {line}{' ' * pad} {accent}┃{RESET}")
-    print(f"{accent}{bottom}{RESET}")
-
-
-def strip_ansi(value: str) -> str:
-    current = value
-    for token in (BLUE, GREEN, YELLOW, RED, DIM, RESET):
-        current = current.replace(token, "")
-    return current
+def print_header(title: str, accent: str = BLUE) -> None:
+    print(f"{accent}┏{'━' * HEADER_WIDTH}┓{RESET}")
+    print(f"{accent}┃ {title.ljust(HEADER_WIDTH - 2)} ┃{RESET}")
+    print(f"{accent}┣{'━' * HEADER_WIDTH}┫{RESET}")
 
 
 def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
     clear_screen()
-    box(title, lines, accent=accent)
+    print_header(title, accent=accent)
+    for line in lines:
+        print(line)
     print()
 
 
@@ -207,7 +195,10 @@ def render_main_menu(values: dict[str, str]) -> None:
         "3. Services",
         "0. Exit",
     ]
-    box("TransitHub Local Menu", lines, accent=BLUE)
+    print_header("TransitHub Local Menu", accent=BLUE)
+    for line in lines:
+        print(line)
+    print()
 
 
 def netbird_menu() -> None:
@@ -222,7 +213,7 @@ def netbird_menu() -> None:
             "1. Show NetBird status",
             "2. Show NetBird logs",
             "3. Reconfigure setup key / management URL",
-            "4. Restart NetBird container",
+            "4. Recreate NetBird container",
             "5. Disable NetBird",
             "0. Back",
         ]
@@ -337,15 +328,15 @@ def xui_menu() -> None:
         container = service_container_name(values, "xui", include_stopped=False)
         lines = [
             f"Container  : {container or 'not running'}",
-            f"Panel URL  : https://{values.get('DOMAIN', '')}/{values.get('PANEL_PATH', '')}/" if values.get("DOMAIN") and values.get("PANEL_PATH") else "Panel URL  : -",
+            f"Status     : {status_badge(bool(container), 'running' if container else 'down')}",
+            f"Panel URL  : {panel_url(values)}",
             "",
-            "1. Show x-ui settings",
+            "1. Show stored settings",
             "2. Change username / password",
-            "3. Reset x-ui two-factor authentication",
-            "4. Show x-ui logs",
-            "5. Restart x-ui container",
-            "6. Open x-ui shell",
-            "7. Show x-ui container name",
+            "3. Show x-ui logs",
+            "4. Recreate x-ui container",
+            "5. Open x-ui shell",
+            "6. Show x-ui container name",
             "0. Back",
         ]
         print_block("3x-ui", lines, accent=YELLOW)
@@ -355,35 +346,40 @@ def xui_menu() -> None:
         elif choice == "2":
             change_xui_credentials(values)
         elif choice == "3":
-            reset_xui_two_factor(values)
-        elif choice == "4":
             tail_service_logs(values, "xui")
-        elif choice == "5":
+        elif choice == "4":
             restart_service(values, "xui")
-        elif choice == "6":
+        elif choice == "5":
             open_xui_shell(values)
-        elif choice == "7":
+        elif choice == "6":
             print_block("3x-ui Container", [container or "xui container not found"], accent=YELLOW)
             pause()
         elif choice == "0":
             return
 
 
-def open_xui_shell(values: dict[str, str]) -> None:
-    container = require_xui_container(values)
-    if not container:
-        return
-    clear_screen()
-    run(["docker", "exec", "-it", container, "/bin/sh"], interactive=True)
+def panel_url(values: dict[str, str]) -> str:
+    domain = values.get("DOMAIN", "").strip()
+    panel_path = values.get("PANEL_PATH", "").strip("/")
+    if not domain or not panel_path:
+        return "-"
+    return f"https://{domain}/{panel_path}/"
 
 
 def show_xui_settings(values: dict[str, str]) -> None:
-    container = require_xui_container(values)
-    if not container:
-        return
-    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-show"])
-    output = (completed.stdout or completed.stderr or "No output").splitlines()
-    print_block("3x-ui Settings", output[:40], accent=YELLOW)
+    container = service_container_name(values, "xui", include_stopped=False)
+    lines = [
+        f"Container name         : {container or 'not running'}",
+        f"Container status       : {'running' if container else 'down'}",
+        f"Panel URL              : {panel_url(values)}",
+        f"Main domain            : {values.get('DOMAIN', '') or '-'}",
+        f"Panel path             : /{values.get('PANEL_PATH', '').strip('/')}/" if values.get("PANEL_PATH") else "Panel path             : -",
+        f"Panel port             : {values.get('PANEL_PORT', '') or '-'}",
+        f"Stored username        : {values.get('CONFIG_USERNAME', '') or '-'}",
+        f"Stored password        : {values.get('CONFIG_PASSWORD', '') or '-'}",
+        f"x-ui image             : {values.get('XUI_IMAGE', '') or '-'}",
+    ]
+    print_block("3x-ui Stored Settings", lines, accent=YELLOW)
     pause()
 
 
@@ -408,26 +404,23 @@ def change_xui_credentials(values: dict[str, str]) -> None:
     if completed.returncode != 0:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        print_block("3x-ui", ["Credentials updated successfully."], accent=GREEN)
+        updates: dict[str, str] = {}
+        if username:
+            updates["CONFIG_USERNAME"] = username
+        if password:
+            updates["CONFIG_PASSWORD"] = password
+        if updates:
+            update_env(INSTANCE_ENV_PATH, updates)
+        print_block("3x-ui", ["Stored credentials and panel login were updated."], accent=GREEN)
     pause()
 
 
-def reset_xui_two_factor(values: dict[str, str]) -> None:
+def open_xui_shell(values: dict[str, str]) -> None:
     container = require_xui_container(values)
     if not container:
         return
     clear_screen()
-    confirm = input("Reset x-ui two-factor authentication? [y/N]: ").strip().lower()
-    if confirm not in {"y", "yes"}:
-        print_block("3x-ui", ["Two-factor reset cancelled."], accent=RED)
-        pause()
-        return
-    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-resetTwoFactor"])
-    if completed.returncode != 0:
-        print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
-    else:
-        print_block("3x-ui", ["Two-factor authentication settings were reset."], accent=GREEN)
-    pause()
+    run(["docker", "exec", "-it", container, "/bin/sh"], interactive=True)
 
 
 def require_xui_container(values: dict[str, str]) -> str:
@@ -445,7 +438,7 @@ def services_menu() -> None:
         lines = [
             "1. Show compose status",
             "2. Tail service logs",
-            "3. Restart a service",
+            "3. Recreate a service container",
             "0. Back",
         ]
         print_block("Services", lines, accent=BLUE)
@@ -485,7 +478,7 @@ def restart_service(values: dict[str, str], service: str, always_include_netbird
     completed = run([*compose_command(values, always_include_netbird=always_include_netbird), "up", "-d", "--force-recreate", service])
     if completed.returncode != 0:
         lines = [line for line in [completed.stdout, completed.stderr] if line]
-        print_block("Service Restart Failed", lines or ["Unknown error"], accent=RED)
+        print_block("Service Recreate Failed", lines or ["Unknown error"], accent=RED)
     else:
         print_block("Services", [f"Service {service} has been recreated."], accent=GREEN)
     pause()
