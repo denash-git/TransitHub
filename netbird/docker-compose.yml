@@ -17,5 +17,9 @@ services:
       NB_DISABLE_DEFAULT_ROUTE: "true"
       NB_LOG_LEVEL: ${NETBIRD_LOG_LEVEL:-info}
     hostname: ${NETBIRD_HOSTNAME:-transithub-netbird}
+    entrypoint:
+      - /bin/sh
+      - /usr/local/bin/transithub-netbird-entrypoint.sh
     volumes:
       - ./netbird/data:/var/lib/netbird
+      - ./netbird/entrypoint.sh:/usr/local/bin/transithub-netbird-entrypoint.sh:ro
