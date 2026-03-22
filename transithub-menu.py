@@ -157,6 +157,7 @@ def credential_updated_lines(label: str, value: str) -> list[str]:
     emphasized = f"{GREEN}{value}{RESET}"
     return [
         f"{label} updated successfully.",
+        "x-ui container was recreated and the new value was applied.",
         "",
         f"{label}:",
         emphasized,
@@ -481,11 +482,14 @@ def change_xui_username(values: dict[str, str]) -> None:
         USERNAME_LENGTH,
         accent=YELLOW,
     )
-    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-username", new_username])
+    previous_username = values.get("CONFIG_USERNAME", "")
+    update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": new_username})
+    refreshed = parse_env(INSTANCE_ENV_PATH)
+    completed = run([*compose_command(refreshed), "up", "-d", "--force-recreate", "xui"])
     if completed.returncode != 0:
+        update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": previous_username})
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": new_username})
         print_block("3x-ui Username", credential_updated_lines("Username", new_username), accent=GREEN)
     pause()
 
@@ -502,11 +506,14 @@ def change_xui_password(values: dict[str, str]) -> None:
         PASSWORD_LENGTH,
         accent=YELLOW,
     )
-    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-password", new_password])
+    previous_password = values.get("CONFIG_PASSWORD", "")
+    update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": new_password})
+    refreshed = parse_env(INSTANCE_ENV_PATH)
+    completed = run([*compose_command(refreshed), "up", "-d", "--force-recreate", "xui"])
     if completed.returncode != 0:
+        update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": previous_password})
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": new_password})
         print_block("3x-ui Password", credential_updated_lines("Password", new_password), accent=GREEN)
     pause()
 
