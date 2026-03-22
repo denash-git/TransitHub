@@ -341,9 +341,11 @@ def xui_menu() -> None:
             "",
             "1. Show x-ui settings",
             "2. Change username / password",
-            "3. Open x-ui shell",
-            "4. Show x-ui container name",
-            "5. Launch upstream x-ui helper",
+            "3. Reset x-ui two-factor authentication",
+            "4. Show x-ui logs",
+            "5. Restart x-ui container",
+            "6. Open x-ui shell",
+            "7. Show x-ui container name",
             "0. Back",
         ]
         print_block("3x-ui", lines, accent=YELLOW)
@@ -353,43 +355,18 @@ def xui_menu() -> None:
         elif choice == "2":
             change_xui_credentials(values)
         elif choice == "3":
-            open_xui_shell(values)
+            reset_xui_two_factor(values)
         elif choice == "4":
+            tail_service_logs(values, "xui")
+        elif choice == "5":
+            restart_service(values, "xui")
+        elif choice == "6":
+            open_xui_shell(values)
+        elif choice == "7":
             print_block("3x-ui Container", [container or "xui container not found"], accent=YELLOW)
             pause()
-        elif choice == "5":
-            launch_xui_cli(values)
         elif choice == "0":
             return
-
-
-def launch_xui_cli(values: dict[str, str]) -> None:
-    container = require_xui_container(values)
-    if not container:
-        return
-    print_block(
-        "3x-ui Helper",
-        [
-            "This is the upstream helper shipped inside 3x-ui.",
-            "In Docker mode it may still print 'Panel state: Not Installed'.",
-            "Use the native TransitHub actions for normal administration.",
-        ],
-        accent=YELLOW,
-    )
-    pause("Press Enter to launch upstream helper")
-    clear_screen()
-    run(
-        [
-            "docker",
-            "exec",
-            "-it",
-            container,
-            "/bin/sh",
-            "-lc",
-            "command -v x-ui >/dev/null 2>&1 && exec x-ui || exec /app/x-ui",
-        ],
-        interactive=True,
-    )
 
 
 def open_xui_shell(values: dict[str, str]) -> None:
@@ -432,6 +409,24 @@ def change_xui_credentials(values: dict[str, str]) -> None:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
         print_block("3x-ui", ["Credentials updated successfully."], accent=GREEN)
+    pause()
+
+
+def reset_xui_two_factor(values: dict[str, str]) -> None:
+    container = require_xui_container(values)
+    if not container:
+        return
+    clear_screen()
+    confirm = input("Reset x-ui two-factor authentication? [y/N]: ").strip().lower()
+    if confirm not in {"y", "yes"}:
+        print_block("3x-ui", ["Two-factor reset cancelled."], accent=RED)
+        pause()
+        return
+    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-resetTwoFactor"])
+    if completed.returncode != 0:
+        print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        print_block("3x-ui", ["Two-factor authentication settings were reset."], accent=GREEN)
     pause()
 
 
