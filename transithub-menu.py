@@ -128,16 +128,29 @@ def random_username(length: int = USERNAME_LENGTH) -> str:
     return secrets.choice(string.ascii_lowercase) + random_token(length - 1)
 
 
-def prompt_fixed_length_value(label: str, default: str, length: int) -> str:
-    print(f"{YELLOW}Press Enter to accept the generated default value.{RESET}")
-    print(f"{YELLOW}{label} must contain exactly {length} characters.{RESET}\n")
+def prompt_fixed_length_value(
+    title: str,
+    label: str,
+    default: str,
+    length: int,
+    accent: str = YELLOW,
+) -> str:
+    error = ""
     while True:
+        lines = [
+            "Press Enter to accept the generated default value.",
+            f"{label} must contain exactly {length} characters.",
+            "",
+        ]
+        if error:
+            lines.extend([f"{RED}{error}{RESET}", ""])
+        print_block(title, lines, accent=accent)
         entered = input(f"{label} [{default}]: ").strip()
         if not entered:
             return default
         if len(entered) == length:
             return entered
-        print(f"{RED}{label} must contain exactly {length} characters. Try again.{RESET}\n")
+        error = f"{label} must contain exactly {length} characters. Try again."
 
 
 def command_works(command: list[str]) -> bool:
@@ -448,9 +461,14 @@ def change_xui_username(values: dict[str, str]) -> None:
     container = require_xui_container(values)
     if not container:
         return
-    clear_screen()
     suggested = random_username(USERNAME_LENGTH)
-    new_username = prompt_fixed_length_value("New username", suggested, USERNAME_LENGTH)
+    new_username = prompt_fixed_length_value(
+        "3x-ui Username",
+        "New username",
+        suggested,
+        USERNAME_LENGTH,
+        accent=YELLOW,
+    )
     completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-username", new_username])
     if completed.returncode != 0:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
@@ -464,9 +482,14 @@ def change_xui_password(values: dict[str, str]) -> None:
     container = require_xui_container(values)
     if not container:
         return
-    clear_screen()
     suggested = random_token(PASSWORD_LENGTH)
-    new_password = prompt_fixed_length_value("New password", suggested, PASSWORD_LENGTH)
+    new_password = prompt_fixed_length_value(
+        "3x-ui Password",
+        "New password",
+        suggested,
+        PASSWORD_LENGTH,
+        accent=YELLOW,
+    )
     completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-password", new_password])
     if completed.returncode != 0:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
