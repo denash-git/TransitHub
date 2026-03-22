@@ -14,6 +14,7 @@ import time
 from .certbot import CertbotError
 from .certbot import certificate_status
 from .certbot import ensure_certificate
+from .host import ensure_menu_launcher
 from .host import ensure_netbird_host_ready
 from .netbird import enabled as netbird_enabled
 from .tgproxy import enabled as tgproxy_enabled
@@ -171,6 +172,8 @@ def run_install() -> int:
     note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
     prune_deployed_tree()
+    note("Install local runtime launcher `menu`")
+    ensure_menu_launcher()
     print_summary(values)
     return 0
 

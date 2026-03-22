@@ -42,6 +42,7 @@ TRANSITHUB_NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
 TRANSITHUB_NGINX_RELOAD_SCRIPT = Path("/usr/local/bin/transithub-nginx-reload")
 TRANSITHUB_RENEW_SERVICE = Path("/etc/systemd/system/transithub-certbot-renew.service")
 TRANSITHUB_RENEW_TIMER = Path("/etc/systemd/system/transithub-certbot-renew.timer")
+TRANSITHUB_MENU_LAUNCHER = Path("/usr/local/bin/menu")
 DOCKER_DAEMON_DIR = Path("/etc/docker")
 DOCKER_DAEMON_CONFIG = DOCKER_DAEMON_DIR / "daemon.json"
 TRANSITHUB_NETBIRD_SYSCTL = Path("/etc/sysctl.d/99-transithub-netbird.conf")
@@ -314,6 +315,22 @@ def ensure_netbird_host_ready() -> dict[str, str]:
         "netbird_sysctl": str(TRANSITHUB_NETBIRD_SYSCTL),
         "default_interface": default_iface,
     }
+
+
+def ensure_menu_launcher() -> None:
+    log("Install local runtime menu launcher at /usr/local/bin/menu")
+    write_executable(
+        TRANSITHUB_MENU_LAUNCHER,
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                "set -euo pipefail",
+                f"project_root={str(paths.PROJECT_ROOT)!r}",
+                'exec python3 "${project_root}/transithub-menu.py" "$@"',
+            ]
+        )
+        + "\n",
+    )
 
 
 def install_compose_support() -> bool:

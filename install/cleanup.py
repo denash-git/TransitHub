@@ -23,6 +23,7 @@ REQUIRED_FILES = [
     PROJECT_ROOT / "tgproxy" / "docker-compose.yml",
     PROJECT_ROOT / "netbird" / "docker-compose.yml",
     PROJECT_ROOT / "netbird" / "entrypoint.sh",
+    PROJECT_ROOT / "transithub-menu.py",
     PROJECT_ROOT / "instance.env",
 ]
 

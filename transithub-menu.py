@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import subprocess
-import sys
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -18,6 +17,13 @@ TGPROXY_COMPOSE_FILE = PROJECT_ROOT / "tgproxy" / "docker-compose.yml"
 NETBIRD_COMPOSE_FILE = PROJECT_ROOT / "netbird" / "docker-compose.yml"
 NETBIRD_SYSCTL_PATH = Path("/etc/sysctl.d/99-transithub-netbird.conf")
 
+BLUE = "\033[1;34m"
+GREEN = "\033[1;32m"
+YELLOW = "\033[1;33m"
+RED = "\033[1;31m"
+DIM = "\033[2m"
+RESET = "\033[0m"
+
 
 def main() -> int:
     require_root()
@@ -27,23 +33,17 @@ def main() -> int:
 
     while True:
         values = parse_env(INSTANCE_ENV_PATH)
-        draw_box(
-            "TransitHub Local Menu",
-            [
-                "1. NetBird",
-                "2. 3x-ui",
-                "3. Services",
-                "0. Exit",
-            ],
-        )
-        choice = input("Select an option: ").strip()
+        clear_screen()
+        render_main_menu(values)
+        choice = prompt("Select an option")
         if choice == "1":
-            netbird_menu(values)
+            netbird_menu()
         elif choice == "2":
-            xui_menu(values)
+            xui_menu()
         elif choice == "3":
-            services_menu(values)
+            services_menu()
         elif choice == "0":
+            clear_screen()
             return 0
 
 
@@ -51,6 +51,24 @@ def require_root() -> None:
     if hasattr(os, "geteuid") and os.geteuid() != 0:
         print("Run this menu as root.")
         raise SystemExit(1)
+
+
+def clear_screen() -> None:
+    print("\033c", end="")
+
+
+def prompt(label: str) -> str:
+    print()
+    return input(f"{YELLOW}{label}:{RESET} ").strip()
+
+
+def pause(message: str = "Press Enter to continue") -> None:
+    print()
+    input(f"{DIM}{message}{RESET}")
+
+
+def bool_env(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def parse_env(path: Path) -> dict[str, str]:
@@ -85,8 +103,11 @@ def update_env(path: Path, updates: dict[str, str]) -> None:
     path.write_text("\n".join(rendered).rstrip() + "\n", encoding="utf-8")
 
 
-def bool_env(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+def command_works(command: list[str]) -> bool:
+    try:
+        return subprocess.run(command, check=False, capture_output=True, text=True).returncode == 0
+    except OSError:
+        return False
 
 
 def compose_base_command() -> list[str]:
@@ -123,18 +144,13 @@ def run(command: list[str], interactive: bool = False) -> subprocess.CompletedPr
     return subprocess.run(command, cwd=PROJECT_ROOT, check=False, capture_output=True, text=True)
 
 
-def command_works(command: list[str]) -> bool:
-    try:
-        return subprocess.run(command, check=False, capture_output=True, text=True).returncode == 0
-    except OSError:
-        return False
-
-
-def service_container_id(values: dict[str, str], service: str, include_stopped: bool = True) -> str:
+def service_container_name(values: dict[str, str], service: str, include_stopped: bool = True) -> str:
     command = [
         "docker",
         "ps",
-        *(["-a", "-q"] if include_stopped else ["-q"]),
+        *(["-a"] if include_stopped else []),
+        "--format",
+        "{{.Names}}",
         "--filter",
         f"label=com.docker.compose.project={values.get('INSTANCE_NAME', '').strip() or 'xui-v1'}",
         "--filter",
@@ -146,67 +162,95 @@ def service_container_id(values: dict[str, str], service: str, include_stopped: 
     return next((line.strip() for line in completed.stdout.splitlines() if line.strip()), "")
 
 
-def draw_box(title: str, lines: list[str]) -> None:
-    width = max([len(title), *[len(line) for line in lines]]) + 4
-    print()
-    print("+" + "-" * width + "+")
-    print(f"|  {title.ljust(width - 2)}|")
-    print("+" + "-" * width + "+")
+def status_badge(ok: bool, text: str) -> str:
+    color = GREEN if ok else RED
+    return f"{color}{text}{RESET}"
+
+
+def box(title: str, lines: list[str], accent: str = BLUE) -> None:
+    width = max(len(title), *[len(strip_ansi(line)) for line in lines], 28)
+    top = "┏" + "━" * (width + 2) + "┓"
+    mid = "┣" + "━" * (width + 2) + "┫"
+    bottom = "┗" + "━" * (width + 2) + "┛"
+    print(f"{accent}{top}{RESET}")
+    print(f"{accent}┃ {title.ljust(width)} ┃{RESET}")
+    print(f"{accent}{mid}{RESET}")
     for line in lines:
-        print(f"|  {line.ljust(width - 2)}|")
-    print("+" + "-" * width + "+")
+        pad = width - len(strip_ansi(line))
+        print(f"{accent}┃{RESET} {line}{' ' * pad} {accent}┃{RESET}")
+    print(f"{accent}{bottom}{RESET}")
+
+
+def strip_ansi(value: str) -> str:
+    current = value
+    for token in (BLUE, GREEN, YELLOW, RED, DIM, RESET):
+        current = current.replace(token, "")
+    return current
+
+
+def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
+    clear_screen()
+    box(title, lines, accent=accent)
     print()
 
 
-def pause() -> None:
-    input("Press Enter to continue...")
+def render_main_menu(values: dict[str, str]) -> None:
+    xui_running = bool(service_container_name(values, "xui", include_stopped=False))
+    lines = [
+        f"Project root : {PROJECT_ROOT}",
+        f"x-ui         : {status_badge(xui_running, 'running' if xui_running else 'down')}",
+        f"TG proxy     : {status_badge(bool_env(values.get('ENABLE_TGPROXY')), 'enabled' if bool_env(values.get('ENABLE_TGPROXY')) else 'disabled')}",
+        f"NetBird      : {status_badge(bool_env(values.get('ENABLE_NETBIRD')), 'enabled' if bool_env(values.get('ENABLE_NETBIRD')) else 'disabled')}",
+        "",
+        "1. NetBird",
+        "2. 3x-ui",
+        "3. Services",
+        "0. Exit",
+    ]
+    box("TransitHub Local Menu", lines, accent=BLUE)
 
 
-def netbird_menu(values: dict[str, str]) -> None:
+def netbird_menu() -> None:
     while True:
+        values = parse_env(INSTANCE_ENV_PATH)
         enabled = bool_env(values.get("ENABLE_NETBIRD"))
-        draw_box(
-            "NetBird",
-            [
-                f"Enabled: {'yes' if enabled else 'no'}",
-                f"Management URL: {values.get('NETBIRD_MANAGEMENT_URL', '') or '-'}",
-                "1. Show status",
-                "2. Show logs",
-                "3. Reconfigure setup key / management URL",
-                "4. Restart NetBird container",
-                "5. Disable NetBird",
-                "0. Back",
-            ],
-        )
-        choice = input("Select an option: ").strip()
+        lines = [
+            f"Enabled        : {status_badge(enabled, 'yes' if enabled else 'no')}",
+            f"Management URL : {values.get('NETBIRD_MANAGEMENT_URL', '') or '-'}",
+            f"Hostname       : {values.get('NETBIRD_HOSTNAME', '') or '-'}",
+            "",
+            "1. Show NetBird status",
+            "2. Show NetBird logs",
+            "3. Reconfigure setup key / management URL",
+            "4. Restart NetBird container",
+            "5. Disable NetBird",
+            "0. Back",
+        ]
+        print_block("NetBird", lines, accent=GREEN)
+        choice = prompt("Select an option")
         if choice == "1":
             show_netbird_status(values)
         elif choice == "2":
             tail_service_logs(values, "netbird")
         elif choice == "3":
             reconfigure_netbird(values)
-            values = parse_env(INSTANCE_ENV_PATH)
         elif choice == "4":
             restart_service(values, "netbird", always_include_netbird=True)
         elif choice == "5":
             disable_netbird(values)
-            values = parse_env(INSTANCE_ENV_PATH)
         elif choice == "0":
             return
 
 
 def show_netbird_status(values: dict[str, str]) -> None:
-    container_id = service_container_id(values, "netbird", include_stopped=False)
-    if not container_id:
-        print("NetBird container is not running.")
+    container = service_container_name(values, "netbird", include_stopped=False)
+    if not container:
+        print_block("NetBird", ["NetBird container is not running."], accent=RED)
         pause()
         return
-    completed = run(["docker", "exec", container_id, "netbird", "status"])
-    if completed.returncode != 0:
-        print(completed.stdout)
-        print(completed.stderr)
-    else:
-        print(completed.stdout)
+    completed = run(["docker", "exec", container, "netbird", "status"])
+    output = (completed.stdout or completed.stderr or "No output").splitlines()
+    print_block("NetBird Status", output[:40], accent=GREEN)
     pause()
 
 
@@ -233,9 +277,10 @@ def detect_default_interface() -> str:
 
 
 def reconfigure_netbird(values: dict[str, str]) -> None:
+    clear_screen()
     current_key = values.get("NETBIRD_SETUP_KEY", "").strip()
     current_url = values.get("NETBIRD_MANAGEMENT_URL", "").strip()
-    print("Enter '-' as setup key to disable NetBird.")
+    print(f"{YELLOW}Enter '-' as setup key to disable NetBird.{RESET}\n")
     new_key = input(f"NetBird setup key [{current_key or 'disabled'}]: ").strip()
     if new_key == "-":
         disable_netbird(values)
@@ -245,7 +290,7 @@ def reconfigure_netbird(values: dict[str, str]) -> None:
     effective_key = new_key or current_key
     effective_url = new_url or current_url
     if not effective_key or not effective_url or not effective_url.startswith("https://"):
-        print("A setup key and a valid https:// management URL are required.")
+        print_block("NetBird", ["A setup key and a valid https:// management URL are required."], accent=RED)
         pause()
         return
 
@@ -262,10 +307,9 @@ def reconfigure_netbird(values: dict[str, str]) -> None:
     refreshed = parse_env(INSTANCE_ENV_PATH)
     completed = run([*compose_command(refreshed, always_include_netbird=True), "up", "-d", "--force-recreate", "netbird"])
     if completed.returncode != 0:
-        print(completed.stdout)
-        print(completed.stderr)
+        print_block("NetBird Reconfigure Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        print("NetBird configuration applied.")
+        print_block("NetBird", ["NetBird configuration applied."], accent=GREEN)
     pause()
 
 
@@ -281,74 +325,144 @@ def disable_netbird(values: dict[str, str]) -> None:
     refreshed = parse_env(INSTANCE_ENV_PATH)
     completed = run([*compose_command(refreshed, always_include_netbird=True), "rm", "-f", "-s", "netbird"])
     if completed.returncode not in {0, 1}:
-        print(completed.stdout)
-        print(completed.stderr)
-    print("NetBird has been disabled in instance.env.")
+        print_block("NetBird Disable Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        print_block("NetBird", ["NetBird has been disabled in instance.env."], accent=GREEN)
     pause()
 
 
-def xui_menu(values: dict[str, str]) -> None:
+def xui_menu() -> None:
     while True:
-        draw_box(
-            "3x-ui",
-            [
-                "1. Launch x-ui CLI menu",
-                "2. Open x-ui shell",
-                "3. Show x-ui container name",
-                "0. Back",
-            ],
-        )
-        choice = input("Select an option: ").strip()
+        values = parse_env(INSTANCE_ENV_PATH)
+        container = service_container_name(values, "xui", include_stopped=False)
+        lines = [
+            f"Container  : {container or 'not running'}",
+            f"Panel URL  : https://{values.get('DOMAIN', '')}/{values.get('PANEL_PATH', '')}/" if values.get("DOMAIN") and values.get("PANEL_PATH") else "Panel URL  : -",
+            "",
+            "1. Show x-ui settings",
+            "2. Change username / password",
+            "3. Open x-ui shell",
+            "4. Show x-ui container name",
+            "5. Launch upstream x-ui helper",
+            "0. Back",
+        ]
+        print_block("3x-ui", lines, accent=YELLOW)
+        choice = prompt("Select an option")
         if choice == "1":
-            launch_xui_cli(values)
+            show_xui_settings(values)
         elif choice == "2":
-            open_xui_shell(values)
+            change_xui_credentials(values)
         elif choice == "3":
-            container_id = service_container_id(values, "xui", include_stopped=False)
-            print(container_id or "xui container not found")
+            open_xui_shell(values)
+        elif choice == "4":
+            print_block("3x-ui Container", [container or "xui container not found"], accent=YELLOW)
             pause()
+        elif choice == "5":
+            launch_xui_cli(values)
         elif choice == "0":
             return
 
 
 def launch_xui_cli(values: dict[str, str]) -> None:
-    container_id = service_container_id(values, "xui", include_stopped=False)
-    if not container_id:
-        print("xui container is not running.")
-        pause()
+    container = require_xui_container(values)
+    if not container:
         return
-    run(["docker", "exec", "-it", container_id, "/bin/sh", "-lc", "x-ui"], interactive=True)
+    print_block(
+        "3x-ui Helper",
+        [
+            "This is the upstream helper shipped inside 3x-ui.",
+            "In Docker mode it may still print 'Panel state: Not Installed'.",
+            "Use the native TransitHub actions for normal administration.",
+        ],
+        accent=YELLOW,
+    )
+    pause("Press Enter to launch upstream helper")
+    clear_screen()
+    run(
+        [
+            "docker",
+            "exec",
+            "-it",
+            container,
+            "/bin/sh",
+            "-lc",
+            "command -v x-ui >/dev/null 2>&1 && exec x-ui || exec /app/x-ui",
+        ],
+        interactive=True,
+    )
 
 
 def open_xui_shell(values: dict[str, str]) -> None:
-    container_id = service_container_id(values, "xui", include_stopped=False)
-    if not container_id:
-        print("xui container is not running.")
+    container = require_xui_container(values)
+    if not container:
+        return
+    clear_screen()
+    run(["docker", "exec", "-it", container, "/bin/sh"], interactive=True)
+
+
+def show_xui_settings(values: dict[str, str]) -> None:
+    container = require_xui_container(values)
+    if not container:
+        return
+    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-show"])
+    output = (completed.stdout or completed.stderr or "No output").splitlines()
+    print_block("3x-ui Settings", output[:40], accent=YELLOW)
+    pause()
+
+
+def change_xui_credentials(values: dict[str, str]) -> None:
+    container = require_xui_container(values)
+    if not container:
+        return
+    clear_screen()
+    print(f"{YELLOW}Leave a field empty to keep the current value.{RESET}\n")
+    username = input("New username: ").strip()
+    password = input("New password: ").strip()
+    command = ["docker", "exec", container, "/app/x-ui", "setting"]
+    if username:
+        command.extend(["-username", username])
+    if password:
+        command.extend(["-password", password])
+    if len(command) == 5:
+        print_block("3x-ui", ["Nothing to change."], accent=RED)
         pause()
         return
-    run(["docker", "exec", "-it", container_id, "/bin/sh"], interactive=True)
+    completed = run(command)
+    if completed.returncode != 0:
+        print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        print_block("3x-ui", ["Credentials updated successfully."], accent=GREEN)
+    pause()
 
 
-def services_menu(values: dict[str, str]) -> None:
+def require_xui_container(values: dict[str, str]) -> str:
+    container = service_container_name(values, "xui", include_stopped=False)
+    if not container:
+        print_block("3x-ui", ["xui container is not running."], accent=RED)
+        pause()
+        return ""
+    return container
+
+
+def services_menu() -> None:
     while True:
-        draw_box(
-            "Services",
-            [
-                "1. Show compose status",
-                "2. Tail service logs",
-                "3. Restart a service",
-                "0. Back",
-            ],
-        )
-        choice = input("Select an option: ").strip()
+        values = parse_env(INSTANCE_ENV_PATH)
+        lines = [
+            "1. Show compose status",
+            "2. Tail service logs",
+            "3. Restart a service",
+            "0. Back",
+        ]
+        print_block("Services", lines, accent=BLUE)
+        choice = prompt("Select an option")
         if choice == "1":
             show_compose_status(values)
         elif choice == "2":
-            service = input("Service name (nginx/xui/conv/tgproxy/netbird): ").strip()
+            service = prompt("Service name (nginx/xui/conv/tgproxy/netbird)")
             if service:
                 tail_service_logs(values, service)
         elif choice == "3":
-            service = input("Service name (nginx/xui/conv/tgproxy/netbird): ").strip()
+            service = prompt("Service name (nginx/xui/conv/tgproxy/netbird)")
             if service:
                 restart_service(values, service, always_include_netbird=(service == "netbird"))
         elif choice == "0":
@@ -357,26 +471,28 @@ def services_menu(values: dict[str, str]) -> None:
 
 def show_compose_status(values: dict[str, str]) -> None:
     completed = run([*compose_command(values, always_include_netbird=True), "ps"])
-    print(completed.stdout or completed.stderr)
+    output = (completed.stdout or completed.stderr or "No output").splitlines()
+    print_block("Compose Status", output, accent=BLUE)
     pause()
 
 
 def tail_service_logs(values: dict[str, str], service: str) -> None:
-    container_id = service_container_id(values, service, include_stopped=False)
-    if not container_id:
-        print(f"{service} container is not running.")
+    container = service_container_name(values, service, include_stopped=False)
+    if not container:
+        print_block("Logs", [f"{service} container is not running."], accent=RED)
         pause()
         return
-    run(["docker", "logs", "--tail=80", "-f", container_id], interactive=True)
+    clear_screen()
+    run(["docker", "logs", "--tail=80", "-f", container], interactive=True)
 
 
 def restart_service(values: dict[str, str], service: str, always_include_netbird: bool = False) -> None:
     completed = run([*compose_command(values, always_include_netbird=always_include_netbird), "up", "-d", "--force-recreate", service])
     if completed.returncode != 0:
-        print(completed.stdout)
-        print(completed.stderr)
+        lines = [line for line in [completed.stdout, completed.stderr] if line]
+        print_block("Service Restart Failed", lines or ["Unknown error"], accent=RED)
     else:
-        print(f"Service {service} has been recreated.")
+        print_block("Services", [f"Service {service} has been recreated."], accent=GREEN)
     pause()
 
 
