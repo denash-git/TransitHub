@@ -8,6 +8,7 @@ import math
 import os
 import secrets
 import shutil
+import sqlite3
 import string
 import subprocess
 
@@ -27,6 +28,7 @@ RENEW_SCRIPT = Path("/usr/local/bin/transithub-certbot-renew")
 NGINX_STOP_SCRIPT = Path("/usr/local/bin/transithub-nginx-stop")
 NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
 NGINX_RELOAD_SCRIPT = Path("/usr/local/bin/transithub-nginx-reload")
+XUI_DB_PATH = PROJECT_ROOT / "xui" / "data" / "x-ui.db"
 
 BLUE = "\033[1;34m"
 GREEN = "\033[1;32m"
@@ -175,7 +177,8 @@ def credential_updated_lines(label: str, value: str) -> list[str]:
     emphasized = f"{GREEN}{value}{RESET}"
     return [
         f"{label} updated successfully.",
-        "x-ui login data and instance.env were updated.",
+        "x-ui live credentials were updated from the panel database.",
+        "instance.env was synchronized as a backup copy.",
         "",
         f"{label}:",
         emphasized,
@@ -286,6 +289,31 @@ def service_state_line(values: dict[str, str], label: str, service: str, enabled
     container = service_container_name(values, service, include_stopped=True)
     running = service_is_running(container)
     return f"{label:<13}: {status_badge(running, 'running' if running else 'stopped')}"
+
+
+def xui_db_state() -> dict[str, str]:
+    state = {
+        "username": "-",
+        "webPort": "-",
+        "webBasePath": "-",
+        "timeLocation": "-",
+        "db_path": str(XUI_DB_PATH),
+    }
+    if not XUI_DB_PATH.exists():
+        return state
+
+    conn = sqlite3.connect(XUI_DB_PATH)
+    try:
+        cur = conn.cursor()
+        row = cur.execute("SELECT username FROM users ORDER BY id LIMIT 1").fetchone()
+        if row and row[0]:
+            state["username"] = str(row[0])
+        for key, value in cur.execute("SELECT key, value FROM settings").fetchall():
+            if key in state and value:
+                state[key] = str(value)
+    finally:
+        conn.close()
+    return state
 
 
 def render_main_menu(values: dict[str, str]) -> None:
@@ -443,12 +471,13 @@ def disable_netbird(values: dict[str, str]) -> None:
 def xui_menu() -> None:
     while True:
         values = parse_env(INSTANCE_ENV_PATH)
+        db_state = xui_db_state()
         container = service_container_name(values, "xui", include_stopped=True)
         running = service_is_running(container)
         lines = [
             f"Container        : {container or 'not running'}",
             f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
-            f"Panel URL        : {panel_url(values)}",
+            f"Panel URL        : {panel_url(values, db_state)}",
             "",
             "1. Show stored settings",
             "2. Change username",
@@ -482,24 +511,28 @@ def xui_menu() -> None:
             return
 
 
-def panel_url(values: dict[str, str]) -> str:
+def panel_url(values: dict[str, str], db_state: dict[str, str] | None = None) -> str:
     domain = values.get("DOMAIN", "").strip()
-    panel_path = values.get("PANEL_PATH", "").strip("/")
+    source = db_state or xui_db_state()
+    panel_path = source.get("webBasePath", "").strip("/")
     if not domain or not panel_path:
         return "-"
     return f"https://{domain}/{panel_path}/"
 
 
 def show_xui_settings(values: dict[str, str]) -> None:
-    container = service_container_name(values, "xui", include_stopped=False)
+    db_state = xui_db_state()
+    container = service_container_name(values, "xui", include_stopped=True)
+    running = service_is_running(container)
     lines = [
         f"Container name   : {container or 'not running'}",
-        f"Container status : {status_badge(bool(container), 'running' if container else 'down')}",
-        f"Panel URL        : {panel_url(values)}",
+        f"Container status : {status_badge(running, 'running' if running else 'stopped')}",
+        f"Panel URL        : {panel_url(values, db_state)}",
         f"Main domain      : {values.get('DOMAIN', '') or '-'}",
-        f"Panel path       : /{values.get('PANEL_PATH', '').strip('/')}/" if values.get("PANEL_PATH") else "Panel path       : -",
-        f"Panel port       : {values.get('PANEL_PORT', '') or '-'}",
-        f"Stored username  : {values.get('CONFIG_USERNAME', '') or '-'}",
+        f"Panel path       : {db_state.get('webBasePath', '-')}",
+        f"Panel port       : {db_state.get('webPort', '-')}",
+        f"Current username : {db_state.get('username', '-')}",
+        f"DB path          : {db_state.get('db_path', '-')}",
     ]
     print_block("3x-ui Stored Settings", lines, accent=YELLOW)
     pause()

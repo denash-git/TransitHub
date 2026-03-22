@@ -14,11 +14,6 @@ services:
       - -lc
       - |
         mkdir -p /etc/x-ui
-        /app/x-ui setting \
-          -username "${CONFIG_USERNAME:-admin}" \
-          -password "${CONFIG_PASSWORD:-changeme}" \
-          -port "${PANEL_PORT:-2053}" \
-          -webBasePath "${PANEL_PATH:-panel}" >/dev/null 2>&1 || true
         exec /app/x-ui
     expose:
       - "${PANEL_PORT:-2053}"
