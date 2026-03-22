@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
+import math
 import os
+import secrets
+import shutil
+import string
 import subprocess
 
 
@@ -16,6 +22,11 @@ CORE_COMPOSE_FILES = [
 TGPROXY_COMPOSE_FILE = PROJECT_ROOT / "tgproxy" / "docker-compose.yml"
 NETBIRD_COMPOSE_FILE = PROJECT_ROOT / "netbird" / "docker-compose.yml"
 NETBIRD_SYSCTL_PATH = Path("/etc/sysctl.d/99-transithub-netbird.conf")
+CERTBOT_BIN = Path("/opt/certbot/bin/certbot")
+RENEW_SCRIPT = Path("/usr/local/bin/transithub-certbot-renew")
+NGINX_STOP_SCRIPT = Path("/usr/local/bin/transithub-nginx-stop")
+NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
+NGINX_RELOAD_SCRIPT = Path("/usr/local/bin/transithub-nginx-reload")
 
 BLUE = "\033[1;34m"
 GREEN = "\033[1;32m"
@@ -23,7 +34,12 @@ YELLOW = "\033[1;33m"
 RED = "\033[1;31m"
 DIM = "\033[2m"
 RESET = "\033[0m"
-HEADER_WIDTH = 55
+
+MIN_HEADER_WIDTH = 55
+MAX_HEADER_WIDTH = 78
+INDENT = "      "
+USERNAME_LENGTH = 10
+PASSWORD_LENGTH = 20
 
 
 def main() -> int:
@@ -34,7 +50,6 @@ def main() -> int:
 
     while True:
         values = parse_env(INSTANCE_ENV_PATH)
-        clear_screen()
         render_main_menu(values)
         choice = prompt("Select an option")
         if choice == "1":
@@ -104,6 +119,27 @@ def update_env(path: Path, updates: dict[str, str]) -> None:
     path.write_text("\n".join(rendered).rstrip() + "\n", encoding="utf-8")
 
 
+def random_token(length: int, alphabet: str | None = None) -> str:
+    chars = alphabet or (string.ascii_lowercase + string.digits)
+    return "".join(secrets.choice(chars) for _ in range(length))
+
+
+def random_username(length: int = USERNAME_LENGTH) -> str:
+    return secrets.choice(string.ascii_lowercase) + random_token(length - 1)
+
+
+def prompt_fixed_length_value(label: str, default: str, length: int) -> str:
+    print(f"{YELLOW}Press Enter to accept the generated default value.{RESET}")
+    print(f"{YELLOW}{label} must contain exactly {length} characters.{RESET}\n")
+    while True:
+        entered = input(f"{label} [{default}]: ").strip()
+        if not entered:
+            return default
+        if len(entered) == length:
+            return entered
+        print(f"{RED}{label} must contain exactly {length} characters. Try again.{RESET}\n")
+
+
 def command_works(command: list[str]) -> bool:
     try:
         return subprocess.run(command, check=False, capture_output=True, text=True).returncode == 0
@@ -168,47 +204,75 @@ def status_badge(ok: bool, text: str) -> str:
     return f"{color}{text}{RESET}"
 
 
-def print_header(title: str, accent: str = BLUE) -> None:
-    print(f"{accent}┏{'━' * HEADER_WIDTH}┓{RESET}")
-    print(f"{accent}┃ {title.ljust(HEADER_WIDTH - 2)} ┃{RESET}")
-    print(f"{accent}┣{'━' * HEADER_WIDTH}┫{RESET}")
+def strip_ansi(value: str) -> str:
+    current = value
+    for token in (BLUE, GREEN, YELLOW, RED, DIM, RESET):
+        current = current.replace(token, "")
+    return current
+
+
+def header_width(title: str, lines: list[str]) -> int:
+    terminal_width = shutil.get_terminal_size((90, 30)).columns
+    content_width = max((len(strip_ansi(line)) + len(INDENT) for line in lines if line), default=0)
+    target = max(MIN_HEADER_WIDTH, len(title) + 4, content_width + 2)
+    return min(target, max(MIN_HEADER_WIDTH, min(MAX_HEADER_WIDTH, terminal_width - 2)))
+
+
+def print_header(title: str, width: int, accent: str = BLUE) -> None:
+    print(f"{accent}┏{'━' * width}┓{RESET}")
+    print(f"{accent}┃{title.center(width)}┃{RESET}")
+    print(f"{accent}┗{'━' * width}┛{RESET}")
 
 
 def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
     clear_screen()
-    print_header(title, accent=accent)
+    print_header(title, header_width(title, lines), accent=accent)
+    print()
     for line in lines:
-        print(line)
+        if line:
+            print(f"{INDENT}{line}")
+        else:
+            print()
     print()
 
 
+def service_state_line(values: dict[str, str], label: str, service: str, enabled_field: str | None = None) -> str:
+    if enabled_field and not bool_env(values.get(enabled_field)):
+        return f"{label:<13}: disabled"
+    container = service_container_name(values, service, include_stopped=False)
+    return f"{label:<13}: {status_badge(bool(container), 'running' if container else 'down')}"
+
+
 def render_main_menu(values: dict[str, str]) -> None:
-    xui_running = bool(service_container_name(values, "xui", include_stopped=False))
     lines = [
-        f"Project root : {PROJECT_ROOT}",
-        f"x-ui         : {status_badge(xui_running, 'running' if xui_running else 'down')}",
-        f"TG proxy     : {status_badge(bool_env(values.get('ENABLE_TGPROXY')), 'enabled' if bool_env(values.get('ENABLE_TGPROXY')) else 'disabled')}",
-        f"NetBird      : {status_badge(bool_env(values.get('ENABLE_NETBIRD')), 'enabled' if bool_env(values.get('ENABLE_NETBIRD')) else 'disabled')}",
+        service_state_line(values, "nginx", "nginx"),
+        service_state_line(values, "3x-ui", "xui"),
+        service_state_line(values, "subconverter", "conv", enabled_field="ENABLE_SUBCONVERTER"),
+        service_state_line(values, "tgproxy", "tgproxy", enabled_field="ENABLE_TGPROXY"),
+        service_state_line(values, "netbird", "netbird", enabled_field="ENABLE_NETBIRD"),
         "",
         "1. NetBird",
         "2. 3x-ui",
         "3. Services",
         "0. Exit",
     ]
-    print_header("TransitHub Local Menu", accent=BLUE)
-    for line in lines:
-        print(line)
-    print()
+    print_block("TransitHub Local Menu", lines, accent=BLUE)
 
 
 def netbird_menu() -> None:
     while True:
         values = parse_env(INSTANCE_ENV_PATH)
         enabled = bool_env(values.get("ENABLE_NETBIRD"))
+        container = service_container_name(values, "netbird", include_stopped=False)
+        if not enabled:
+            status = "disabled"
+        else:
+            status = status_badge(bool(container), "running" if container else "down")
         lines = [
-            f"Enabled        : {status_badge(enabled, 'yes' if enabled else 'no')}",
-            f"Management URL : {values.get('NETBIRD_MANAGEMENT_URL', '') or '-'}",
-            f"Hostname       : {values.get('NETBIRD_HOSTNAME', '') or '-'}",
+            f"Container        : {container or 'not running'}",
+            f"Status           : {status}",
+            f"Management URL   : {values.get('NETBIRD_MANAGEMENT_URL', '') or '-'}",
+            f"Hostname         : {values.get('NETBIRD_HOSTNAME', '') or '-'}",
             "",
             "1. Show NetBird status",
             "2. Show NetBird logs",
@@ -327,16 +391,16 @@ def xui_menu() -> None:
         values = parse_env(INSTANCE_ENV_PATH)
         container = service_container_name(values, "xui", include_stopped=False)
         lines = [
-            f"Container  : {container or 'not running'}",
-            f"Status     : {status_badge(bool(container), 'running' if container else 'down')}",
-            f"Panel URL  : {panel_url(values)}",
+            f"Container        : {container or 'not running'}",
+            f"Status           : {status_badge(bool(container), 'running' if container else 'down')}",
+            f"Panel URL        : {panel_url(values)}",
             "",
             "1. Show stored settings",
-            "2. Change username / password",
-            "3. Show x-ui logs",
-            "4. Recreate x-ui container",
-            "5. Open x-ui shell",
-            "6. Show x-ui container name",
+            "2. Change username",
+            "3. Change password",
+            "4. Show x-ui logs",
+            "5. Recreate x-ui container",
+            "6. Open x-ui shell",
             "0. Back",
         ]
         print_block("3x-ui", lines, accent=YELLOW)
@@ -344,16 +408,15 @@ def xui_menu() -> None:
         if choice == "1":
             show_xui_settings(values)
         elif choice == "2":
-            change_xui_credentials(values)
+            change_xui_username(values)
         elif choice == "3":
-            tail_service_logs(values, "xui")
+            change_xui_password(values)
         elif choice == "4":
-            restart_service(values, "xui")
+            tail_service_logs(values, "xui")
         elif choice == "5":
-            open_xui_shell(values)
+            restart_service(values, "xui")
         elif choice == "6":
-            print_block("3x-ui Container", [container or "xui container not found"], accent=YELLOW)
-            pause()
+            open_xui_shell(values)
         elif choice == "0":
             return
 
@@ -369,49 +432,47 @@ def panel_url(values: dict[str, str]) -> str:
 def show_xui_settings(values: dict[str, str]) -> None:
     container = service_container_name(values, "xui", include_stopped=False)
     lines = [
-        f"Container name         : {container or 'not running'}",
-        f"Container status       : {'running' if container else 'down'}",
-        f"Panel URL              : {panel_url(values)}",
-        f"Main domain            : {values.get('DOMAIN', '') or '-'}",
-        f"Panel path             : /{values.get('PANEL_PATH', '').strip('/')}/" if values.get("PANEL_PATH") else "Panel path             : -",
-        f"Panel port             : {values.get('PANEL_PORT', '') or '-'}",
-        f"Stored username        : {values.get('CONFIG_USERNAME', '') or '-'}",
-        f"Stored password        : {values.get('CONFIG_PASSWORD', '') or '-'}",
-        f"x-ui image             : {values.get('XUI_IMAGE', '') or '-'}",
+        f"Container name   : {container or 'not running'}",
+        f"Container status : {status_badge(bool(container), 'running' if container else 'down')}",
+        f"Panel URL        : {panel_url(values)}",
+        f"Main domain      : {values.get('DOMAIN', '') or '-'}",
+        f"Panel path       : /{values.get('PANEL_PATH', '').strip('/')}/" if values.get("PANEL_PATH") else "Panel path       : -",
+        f"Panel port       : {values.get('PANEL_PORT', '') or '-'}",
+        f"Stored username  : {values.get('CONFIG_USERNAME', '') or '-'}",
     ]
     print_block("3x-ui Stored Settings", lines, accent=YELLOW)
     pause()
 
 
-def change_xui_credentials(values: dict[str, str]) -> None:
+def change_xui_username(values: dict[str, str]) -> None:
     container = require_xui_container(values)
     if not container:
         return
     clear_screen()
-    print(f"{YELLOW}Leave a field empty to keep the current value.{RESET}\n")
-    username = input("New username: ").strip()
-    password = input("New password: ").strip()
-    command = ["docker", "exec", container, "/app/x-ui", "setting"]
-    if username:
-        command.extend(["-username", username])
-    if password:
-        command.extend(["-password", password])
-    if len(command) == 5:
-        print_block("3x-ui", ["Nothing to change."], accent=RED)
-        pause()
-        return
-    completed = run(command)
+    suggested = random_username(USERNAME_LENGTH)
+    new_username = prompt_fixed_length_value("New username", suggested, USERNAME_LENGTH)
+    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-username", new_username])
     if completed.returncode != 0:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
-        updates: dict[str, str] = {}
-        if username:
-            updates["CONFIG_USERNAME"] = username
-        if password:
-            updates["CONFIG_PASSWORD"] = password
-        if updates:
-            update_env(INSTANCE_ENV_PATH, updates)
-        print_block("3x-ui", ["Stored credentials and panel login were updated."], accent=GREEN)
+        update_env(INSTANCE_ENV_PATH, {"CONFIG_USERNAME": new_username})
+        print_block("3x-ui", ["Username updated successfully."], accent=GREEN)
+    pause()
+
+
+def change_xui_password(values: dict[str, str]) -> None:
+    container = require_xui_container(values)
+    if not container:
+        return
+    clear_screen()
+    suggested = random_token(PASSWORD_LENGTH)
+    new_password = prompt_fixed_length_value("New password", suggested, PASSWORD_LENGTH)
+    completed = run(["docker", "exec", container, "/app/x-ui", "setting", "-password", new_password])
+    if completed.returncode != 0:
+        print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
+    else:
+        update_env(INSTANCE_ENV_PATH, {"CONFIG_PASSWORD": new_password})
+        print_block("3x-ui", ["Password updated successfully."], accent=GREEN)
     pause()
 
 
@@ -437,8 +498,9 @@ def services_menu() -> None:
         values = parse_env(INSTANCE_ENV_PATH)
         lines = [
             "1. Show compose status",
-            "2. Tail service logs",
-            "3. Recreate a service container",
+            "2. Show service logs",
+            "3. TLS certificate",
+            "4. Time settings",
             "0. Back",
         ]
         print_block("Services", lines, accent=BLUE)
@@ -450,9 +512,9 @@ def services_menu() -> None:
             if service:
                 tail_service_logs(values, service)
         elif choice == "3":
-            service = prompt("Service name (nginx/xui/conv/tgproxy/netbird)")
-            if service:
-                restart_service(values, service, always_include_netbird=(service == "netbird"))
+            certificate_menu(values)
+        elif choice == "4":
+            time_menu(values)
         elif choice == "0":
             return
 
@@ -481,6 +543,277 @@ def restart_service(values: dict[str, str], service: str, always_include_netbird
         print_block("Service Recreate Failed", lines or ["Unknown error"], accent=RED)
     else:
         print_block("Services", [f"Service {service} has been recreated."], accent=GREEN)
+    pause()
+
+
+def certificate_menu(values: dict[str, str]) -> None:
+    while True:
+        cert = certificate_status(values)
+        lines = [
+            f"Mode            : {'staging' if cert['staging'] else 'production'}",
+            f"Domains         : {', '.join(certificate_domains(values))}",
+            f"Cert dir        : {cert['cert_dir']}",
+            f"Expires at      : {cert['expires_at']}",
+            f"Days remaining  : {cert['days_remaining']}",
+            "",
+            "1. Run renew now",
+            "2. Force reissue certificate",
+            "0. Back",
+        ]
+        print_block("TLS Certificate", lines, accent=BLUE)
+        choice = prompt("Select an option")
+        if choice == "1":
+            run_certificate_renew_now()
+        elif choice == "2":
+            force_reissue_certificate(values)
+        elif choice == "0":
+            return
+
+
+def certificate_domains(values: dict[str, str]) -> list[str]:
+    domains = [values.get("DOMAIN", "").strip()]
+    tgproxy_host = values.get("TGPROXY_PUBLIC_HOST", "").strip()
+    if bool_env(values.get("ENABLE_TGPROXY")) and tgproxy_host and tgproxy_host not in domains:
+        domains.append(tgproxy_host)
+    return [domain for domain in domains if domain]
+
+
+def certificate_status(values: dict[str, str]) -> dict[str, object]:
+    cert_dir = values.get("CERT_LIVE_DIR", "").strip() or "-"
+    fullchain = Path(cert_dir) / "fullchain.pem" if cert_dir != "-" else Path("")
+    result: dict[str, object] = {
+        "staging": bool_env(values.get("CERTBOT_STAGING")),
+        "cert_dir": cert_dir,
+        "expires_at": "-",
+        "days_remaining": "-",
+        "summary": "missing",
+    }
+    if not fullchain.exists():
+        return result
+    completed = run(["openssl", "x509", "-in", str(fullchain), "-noout", "-enddate"])
+    if completed.returncode != 0:
+        result["summary"] = "present, expiry unreadable"
+        return result
+    line = completed.stdout.strip()
+    if not line.startswith("notAfter="):
+        result["summary"] = "present, expiry unreadable"
+        return result
+    try:
+        expires_at = parsedate_to_datetime(line.split("=", 1)[1].strip())
+    except (TypeError, ValueError):
+        result["summary"] = "present, expiry unreadable"
+        return result
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    expires_at = expires_at.astimezone(timezone.utc)
+    remaining = max(0.0, (expires_at - datetime.now(timezone.utc)).total_seconds())
+    days_remaining = math.ceil(remaining / 86400) if remaining else 0
+    result["expires_at"] = expires_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+    result["days_remaining"] = str(days_remaining)
+    result["summary"] = f"{days_remaining} day(s) left"
+    return result
+
+
+def run_certificate_renew_now() -> None:
+    if not RENEW_SCRIPT.exists():
+        print_block("TLS Certificate", [f"Renew script was not found: {RENEW_SCRIPT}"], accent=RED)
+        pause()
+        return
+    completed = run([str(RENEW_SCRIPT)])
+    lines = [line for line in [completed.stdout, completed.stderr] if line]
+    title = "TLS Renew Failed" if completed.returncode != 0 else "TLS Renew"
+    accent = RED if completed.returncode != 0 else GREEN
+    if completed.returncode == 0:
+        lines.insert(0, "Manual renew attempt completed.")
+        lines.insert(1, "This does not force a new certificate if renewal is not yet due.")
+    print_block(title, lines or ["No output"], accent=accent)
+    pause()
+
+
+def force_reissue_certificate(values: dict[str, str]) -> None:
+    clear_screen()
+    print(f"{RED}Force reissue requests a brand new certificate and may hit Let's Encrypt rate limits.{RESET}\n")
+    confirm = input("Continue with force reissue? [y/N]: ").strip().lower()
+    if confirm not in {"y", "yes"}:
+        print_block("TLS Certificate", ["Force reissue cancelled."], accent=RED)
+        pause()
+        return
+
+    certbot_bin = str(CERTBOT_BIN) if CERTBOT_BIN.exists() else "certbot"
+    domains = certificate_domains(values)
+    if not domains:
+        print_block("TLS Certificate", ["No domains are configured for certificate issuance."], accent=RED)
+        pause()
+        return
+
+    cert_name = values.get("DOMAIN", "").strip()
+    if bool_env(values.get("CERTBOT_STAGING")):
+        cert_name = f"{cert_name}-staging"
+
+    command = [
+        certbot_bin,
+        "certonly",
+        "--standalone",
+        "--non-interactive",
+        "--agree-tos",
+        "--force-renewal",
+        "--cert-name",
+        cert_name,
+        "--pre-hook",
+        str(NGINX_STOP_SCRIPT),
+        "--post-hook",
+        str(NGINX_START_SCRIPT),
+        "--deploy-hook",
+        str(NGINX_RELOAD_SCRIPT),
+    ]
+    for domain in domains:
+        command.extend(["-d", domain])
+    if bool_env(values.get("CERTBOT_STAGING")):
+        command.append("--staging")
+    email = values.get("CERTBOT_EMAIL", "").strip()
+    if email:
+        command.extend(["-m", email])
+    else:
+        command.append("--register-unsafely-without-email")
+
+    completed = run(command)
+    lines = [line for line in [completed.stdout, completed.stderr] if line]
+    title = "Force Reissue Failed" if completed.returncode != 0 else "TLS Certificate"
+    accent = RED if completed.returncode != 0 else GREEN
+    if completed.returncode == 0:
+        lines.insert(0, "Certificate force reissue completed.")
+    print_block(title, lines or ["No output"], accent=accent)
+    pause()
+
+
+def time_menu(values: dict[str, str]) -> None:
+    while True:
+        lines = [
+            "1. Show time status",
+            "2. Show timezone examples",
+            "3. Change timezone",
+            "0. Back",
+        ]
+        print_block("Time Settings", lines, accent=BLUE)
+        choice = prompt("Select an option")
+        if choice == "1":
+            show_time_status(values)
+        elif choice == "2":
+            show_timezone_examples(values)
+        elif choice == "3":
+            change_timezone(values)
+        elif choice == "0":
+            return
+
+
+def timedatectl_show(fields: list[str]) -> dict[str, str]:
+    if not command_works(["timedatectl", "--version"]):
+        return {}
+    command = ["timedatectl", "show"]
+    for field in fields:
+        command.extend(["-p", field])
+    completed = run(command)
+    if completed.returncode != 0:
+        return {}
+    result: dict[str, str] = {}
+    for line in completed.stdout.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        result[key.strip()] = value.strip()
+    return result
+
+
+def time_status(values: dict[str, str] | None = None) -> dict[str, str]:
+    timed = timedatectl_show(["Timezone", "NTPSynchronized", "NTP"])
+    local_time = run(["date"]).stdout.strip() or "-"
+    timezone_name = timed.get("Timezone", (values or {}).get("TZ", "-"))
+    ntp_sync = timed.get("NTPSynchronized", "")
+    ntp_enabled = timed.get("NTP", "")
+    if ntp_sync.lower() == "yes":
+        sync = "synchronized"
+    elif ntp_sync.lower() == "no":
+        sync = "not synchronized"
+    elif ntp_enabled.lower() == "yes":
+        sync = "enabled, state unknown"
+    else:
+        sync = "unknown"
+    return {
+        "timezone": timezone_name or "-",
+        "local_time": local_time,
+        "sync": sync,
+    }
+
+
+def show_time_status(values: dict[str, str]) -> None:
+    state = time_status(values)
+    sync_ok = state["sync"] == "synchronized"
+    lines = [
+        f"Host timezone   : {state['timezone']}",
+        f"Host local time : {state['local_time']}",
+        f"Time sync       : {status_badge(sync_ok, state['sync']) if state['sync'] != 'unknown' else state['sync']}",
+        f"TransitHub TZ   : {values.get('TZ', '') or '-'}",
+    ]
+    print_block("Time Status", lines, accent=BLUE)
+    pause()
+
+
+def timezone_examples() -> list[str]:
+    return [
+        "Use canonical format: Region/City",
+        "",
+        "Examples:",
+        "UTC",
+        "Europe/Moscow",
+        "Europe/Berlin",
+        "America/New_York",
+        "Asia/Almaty",
+        "",
+        "Full list on host:",
+        "timedatectl list-timezones",
+    ]
+
+
+def show_timezone_examples(values: dict[str, str]) -> None:
+    lines = [
+        f"Current host TZ : {time_status(values)['timezone']}",
+        f"TransitHub TZ   : {values.get('TZ', '') or '-'}",
+        "",
+        *timezone_examples(),
+    ]
+    print_block("Timezone Examples", lines, accent=BLUE)
+    pause()
+
+
+def change_timezone(values: dict[str, str]) -> None:
+    clear_screen()
+    current = values.get("TZ", "").strip()
+    print("Use canonical format: Region/City")
+    print("Examples: UTC, Europe/Moscow, America/New_York, Asia/Almaty")
+    print("Full list: timedatectl list-timezones")
+    print()
+    new_timezone = input(f"New timezone [{current or 'Europe/Moscow'}]: ").strip()
+    if not new_timezone:
+        print_block("Time Settings", ["Timezone was not changed."], accent=RED)
+        pause()
+        return
+    if command_works(["timedatectl", "--version"]):
+        completed = run(["timedatectl", "set-timezone", new_timezone])
+        if completed.returncode != 0:
+            lines = [line for line in [completed.stdout, completed.stderr] if line]
+            lines.extend(["", *timezone_examples()])
+            print_block("Time Settings Failed", lines, accent=RED)
+            pause()
+            return
+    update_env(INSTANCE_ENV_PATH, {"TZ": new_timezone})
+    print_block(
+        "Time Settings",
+        [
+            "Timezone updated in host configuration and instance.env.",
+            "Running containers keep the old timezone until they are recreated.",
+        ],
+        accent=GREEN,
+    )
     pause()
 
 
