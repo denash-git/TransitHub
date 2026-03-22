@@ -14,6 +14,7 @@ services:
     environment:
       NB_SETUP_KEY: ${NETBIRD_SETUP_KEY}
       NB_MANAGEMENT_URL: ${NETBIRD_MANAGEMENT_URL}
+      NB_DISABLE_DEFAULT_ROUTE: "true"
       NB_LOG_LEVEL: ${NETBIRD_LOG_LEVEL:-info}
     hostname: ${NETBIRD_HOSTNAME:-transithub-netbird}
     volumes:

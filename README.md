@@ -44,6 +44,10 @@ bash install.sh
   Домен для REALITY.
 - `Telegram proxy domain`
   Домен Telegram-прокси. Если ввести `-`, Telegram-прокси не будет поднят.
+- `NetBird setup key`
+  Опциональный setup key NetBird. Если оставить пустым или ввести `-`, NetBird не будет подключаться.
+- `NetBird management URL`
+  URL панели управления NetBird в формате `https://...`. Спрашивается только если задан setup key.
 - `Timezone`
   Таймзона контейнеров. По умолчанию берётся текущая таймзона VPS.
 
@@ -55,8 +59,9 @@ bash install.sh
 - выпускает TLS-сертификат Let's Encrypt
 - настраивает автоматическое продление сертификата через `systemd timer`
 - генерирует runtime-конфиги
-- поднимает `nginx`, `xui`, `conv` и опционально Telegram-прокси
+- поднимает `nginx`, `xui`, `conv` и опционально Telegram-прокси и NetBird
 - настраивает `3x-ui` и базовые inbound'ы
+- если включён NetBird, готовит хост для routing peer / exit node без смены default route на самой VPS
 
 ## Полезно знать
 
@@ -74,10 +79,17 @@ CERTBOT_STAGING=true bash <(curl -fsSL https://raw.githubusercontent.com/denash-
 ```
 
 - если время на VPS не синхронизировано, установщик покажет предупреждение, но продолжит работу
+- если включён NetBird, контейнер поднимается в `host` network mode и получает внутренний интерфейс `wt0`, но default route самой VPS не меняется
 - с `3x-ui` можно взаимодействовать и через CLI внутри контейнера:
 
 ```bash
 XUI_CONTAINER="$(docker ps --format '{{.Names}}' | grep xui | head -n1)"
 docker exec -it "$XUI_CONTAINER" /bin/sh
 x-ui
+```
+
+- после установки можно вручную запускать локальное меню проекта:
+
+```bash
+python3 transithub-menu.py
 ```

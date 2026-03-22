@@ -89,6 +89,7 @@ detect_tz() {
 
 main() {
   local tz domain reality_domain tgproxy_public_host fake_site instance_name tgproxy_state
+  local netbird_setup_key netbird_management_url netbird_state
   local -a install_args
 
   frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
@@ -104,6 +105,28 @@ main() {
     tgproxy_public_host=""
   fi
   printf '\n' > /dev/tty
+  printf '%b%s%b [disabled, Enter = skip]: ' "$BOLD" 'NetBird setup key' "$RESET" > /dev/tty
+  IFS= read -r netbird_setup_key < /dev/tty
+  if [[ "$netbird_setup_key" == "-" ]]; then
+    netbird_setup_key=""
+  fi
+  netbird_management_url=""
+  if [[ -n "$netbird_setup_key" ]]; then
+    while true; do
+      printf '%b%s%b [https://management.example.com]: ' "$BOLD" 'NetBird management URL' "$RESET" > /dev/tty
+      IFS= read -r netbird_management_url < /dev/tty
+      if [[ -z "$netbird_management_url" || "$netbird_management_url" == "-" ]]; then
+        netbird_setup_key=""
+        netbird_management_url=""
+        break
+      fi
+      if [[ "$netbird_management_url" == https://* ]]; then
+        break
+      fi
+      printf '\nNetBird management URL must start with https:// or be skipped with -.\n\n' > /dev/tty
+    done
+  fi
+  printf '\n' > /dev/tty
   tz="$(prompt_default 'Timezone' "$(detect_tz)")"
   fake_site="$(pick_random_fake_site)"
   if [[ -n "$tgproxy_public_host" ]]; then
@@ -111,12 +134,18 @@ main() {
   else
     tgproxy_state='disabled'
   fi
+  if [[ -n "$netbird_setup_key" && -n "$netbird_management_url" ]]; then
+    netbird_state="${netbird_management_url}"
+  else
+    netbird_state='disabled'
+  fi
 
   spacer 3
   printf '%bStarting install with:%b\n' "$BOLD" "$RESET"
   printf '  domain    : %s\n' "$domain"
   printf '  reality   : %s\n' "$reality_domain"
   printf '  tgproxy   : %s\n' "$tgproxy_state"
+  printf '  netbird   : %s\n' "$netbird_state"
   printf '  timezone  : %s\n' "$tz"
   printf '  fake site : %s\n' "$fake_site"
   spacer 3
@@ -128,6 +157,8 @@ main() {
     --set "DOMAIN=${domain}"
     --set "REALITY_DOMAIN=${reality_domain}"
     --set "TGPROXY_PUBLIC_HOST=${tgproxy_public_host}"
+    --set "NETBIRD_SETUP_KEY=${netbird_setup_key}"
+    --set "NETBIRD_MANAGEMENT_URL=${netbird_management_url}"
     --set "TZ=${tz}"
     --set "FAKE_SITE_TEMPLATE=${fake_site}"
   )
