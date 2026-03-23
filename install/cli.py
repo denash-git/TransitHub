@@ -746,57 +746,24 @@ def qr_matrix(link: str, border: int) -> list[list[bool]]:
     return qr.get_matrix()
 
 
-def render_qr_braille_lines(matrix: list[list[bool]]) -> list[str]:
+def render_qr_terminal_lines(matrix: list[list[bool]], module_width: int) -> list[str]:
     if not matrix:
         return []
-    height = len(matrix)
-    width = len(matrix[0])
+    dark = "\033[40m"
+    light = "\033[47m"
     lines: list[str] = []
-    for top in range(0, height, 4):
+    module = " " * max(module_width, 1)
+    for row in matrix:
         rendered_parts: list[str] = []
-        for left in range(0, width, 2):
-            pattern = 0
-            if top < height and left < width and matrix[top][left]:
-                pattern |= 0x01
-            if top + 1 < height and left < width and matrix[top + 1][left]:
-                pattern |= 0x02
-            if top + 2 < height and left < width and matrix[top + 2][left]:
-                pattern |= 0x04
-            if top + 3 < height and left < width and matrix[top + 3][left]:
-                pattern |= 0x40
-            if top < height and left + 1 < width and matrix[top][left + 1]:
-                pattern |= 0x08
-            if top + 1 < height and left + 1 < width and matrix[top + 1][left + 1]:
-                pattern |= 0x10
-            if top + 2 < height and left + 1 < width and matrix[top + 2][left + 1]:
-                pattern |= 0x20
-            if top + 3 < height and left + 1 < width and matrix[top + 3][left + 1]:
-                pattern |= 0x80
-            rendered_parts.append(" " if pattern == 0 else chr(0x2800 + pattern))
-        lines.append("".join(rendered_parts).rstrip())
+        for cell in row:
+            rendered_parts.append((dark if cell else light) + module)
+        lines.append("".join(rendered_parts) + RESET)
     return lines
 
 
-def downsample_qr_matrix(matrix: list[list[bool]], factor: int) -> list[list[bool]]:
-    if factor <= 1 or not matrix:
-        return matrix
-    height = len(matrix)
-    width = len(matrix[0])
-    reduced: list[list[bool]] = []
-    for top in range(0, height, factor):
-        row: list[bool] = []
-        for left in range(0, width, factor):
-            cell = False
-            for y in range(top, min(top + factor, height)):
-                for x in range(left, min(left + factor, width)):
-                    cell = cell or matrix[y][x]
-            row.append(cell)
-        reduced.append(row)
-    return reduced
-
-
 def print_tgproxy_summary_qr(link: str) -> tuple[int, int]:
-    lines = render_qr_braille_lines(downsample_qr_matrix(qr_matrix(link, border=0), factor=2))
+    matrix = qr_matrix(link, border=1)
+    lines = render_qr_terminal_lines(matrix, module_width=1)
     if not lines:
         return (0, 0)
     print("TG Proxy QR")
@@ -804,7 +771,7 @@ def print_tgproxy_summary_qr(link: str) -> tuple[int, int]:
     for line in lines:
         print(f"  {line}")
     print()
-    return (max(len(line) for line in lines), len(lines))
+    return (len(matrix[0]), len(matrix))
 
 
 def print_summary(values: dict[str, str]) -> None:

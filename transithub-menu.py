@@ -348,7 +348,7 @@ def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     if qrcode is None:
         raise RuntimeError("The qrcode runtime dependency is not installed.")
     matrix = qr_matrix(link, border=1)
-    qr_lines = render_qr_braille_lines(matrix)
+    qr_lines = render_qr_terminal_lines(matrix, module_width=2)
 
     width = header_width(title, [link, "Scan this QR code in Telegram."])
     clear_screen()
@@ -372,34 +372,18 @@ def qr_matrix(link: str, border: int) -> list[list[bool]]:
     return qr.get_matrix()
 
 
-def render_qr_braille_lines(matrix: list[list[bool]]) -> list[str]:
+def render_qr_terminal_lines(matrix: list[list[bool]], module_width: int) -> list[str]:
     if not matrix:
         return []
-    height = len(matrix)
-    width = len(matrix[0])
+    dark = "\033[40m"
+    light = "\033[47m"
     lines: list[str] = []
-    for top in range(0, height, 4):
+    module = " " * max(module_width, 1)
+    for row in matrix:
         rendered_parts: list[str] = []
-        for left in range(0, width, 2):
-            pattern = 0
-            if top < height and left < width and matrix[top][left]:
-                pattern |= 0x01
-            if top + 1 < height and left < width and matrix[top + 1][left]:
-                pattern |= 0x02
-            if top + 2 < height and left < width and matrix[top + 2][left]:
-                pattern |= 0x04
-            if top + 3 < height and left < width and matrix[top + 3][left]:
-                pattern |= 0x40
-            if top < height and left + 1 < width and matrix[top][left + 1]:
-                pattern |= 0x08
-            if top + 1 < height and left + 1 < width and matrix[top + 1][left + 1]:
-                pattern |= 0x10
-            if top + 2 < height and left + 1 < width and matrix[top + 2][left + 1]:
-                pattern |= 0x20
-            if top + 3 < height and left + 1 < width and matrix[top + 3][left + 1]:
-                pattern |= 0x80
-            rendered_parts.append(" " if pattern == 0 else chr(0x2800 + pattern))
-        lines.append("".join(rendered_parts).rstrip())
+        for cell in row:
+            rendered_parts.append((dark if cell else light) + module)
+        lines.append("".join(rendered_parts) + RESET)
     return lines
 
 
