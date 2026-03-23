@@ -393,54 +393,51 @@ def render_qr_halfblock_lines(matrix: list[list[bool]]) -> list[str]:
     return lines
 
 
-def render_qr_terminal_lines(matrix: list[list[bool]], module_width: int) -> list[str]:
-    if not matrix:
-        return []
-    dark = "\033[40m"
-    light = "\033[47m"
-    module = " " * max(module_width, 1)
-    lines: list[str] = []
-    for row in matrix:
-        rendered_parts: list[str] = []
-        for cell in row:
-            rendered_parts.append((dark if cell else light) + module)
-        lines.append("".join(rendered_parts) + RESET)
-    return lines
+def downsample_qr_matrix(matrix: list[list[bool]], factor: int) -> list[list[bool]]:
+    if factor <= 1 or not matrix:
+        return matrix
+    height = len(matrix)
+    width = len(matrix[0])
+    reduced: list[list[bool]] = []
+    for top in range(0, height, factor):
+        row: list[bool] = []
+        for left in range(0, width, factor):
+            cell = False
+            for y in range(top, min(top + factor, height)):
+                for x in range(left, min(left + factor, width)):
+                    cell = cell or matrix[y][x]
+            row.append(cell)
+        reduced.append(row)
+    return reduced
 
 
 def qr_variant_options(link: str) -> dict[str, dict[str, object]]:
     matrix_border_1 = qr_matrix(link, border=1)
     matrix_border_0 = qr_matrix(link, border=0)
+    matrix_downsample_2 = downsample_qr_matrix(matrix_border_0, factor=2)
+    matrix_downsample_3 = downsample_qr_matrix(matrix_border_0, factor=3)
     return {
         "1": {
             "label": f"Half-block border 1 ({len(matrix_border_1[0])}x{math.ceil(len(matrix_border_1) / 2)}) (current)",
             "matrix": matrix_border_1,
-            "renderer": "half",
         },
         "2": {
             "label": f"Half-block border 0 ({len(matrix_border_0[0])}x{math.ceil(len(matrix_border_0) / 2)})",
             "matrix": matrix_border_0,
-            "renderer": "half",
         },
         "3": {
-            "label": f"ANSI width 1 border 1 ({len(matrix_border_1[0])}x{len(matrix_border_1)})",
-            "matrix": matrix_border_1,
-            "renderer": "ansi1",
+            "label": f"Half-block downsample x2 ({len(matrix_downsample_2[0])}x{math.ceil(len(matrix_downsample_2) / 2)})",
+            "matrix": matrix_downsample_2,
         },
         "4": {
-            "label": f"ANSI width 1 border 0 ({len(matrix_border_0[0])}x{len(matrix_border_0)})",
-            "matrix": matrix_border_0,
-            "renderer": "ansi1",
+            "label": f"Half-block downsample x3 ({len(matrix_downsample_3[0])}x{math.ceil(len(matrix_downsample_3) / 2)})",
+            "matrix": matrix_downsample_3,
         },
     }
 
 
-def show_qr_variant(title: str, link: str, matrix: list[list[bool]], renderer: str, accent: str = GREEN) -> None:
-    if renderer == "half":
-        qr_lines = render_qr_halfblock_lines(matrix)
-    else:
-        qr_lines = render_qr_terminal_lines(matrix, module_width=1)
-
+def show_qr_variant(title: str, link: str, matrix: list[list[bool]], accent: str = GREEN) -> None:
+    qr_lines = render_qr_halfblock_lines(matrix)
     width = header_width(title, [link, "Scan this QR code in Telegram."])
     clear_screen()
     print_header(title, width, accent=accent)
@@ -778,7 +775,6 @@ def show_tgproxy_qr(values: dict[str, str]) -> None:
             f"TGProxy QR {choice}",
             link,
             variant["matrix"],  # type: ignore[arg-type]
-            str(variant["renderer"]),
             accent=GREEN,
         )
         pause()
