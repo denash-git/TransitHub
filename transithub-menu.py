@@ -382,15 +382,76 @@ def render_qr_halfblock_lines(matrix: list[list[bool]]) -> list[str]:
         rendered_parts: list[str] = []
         for top_cell, bottom_cell in zip(top, bottom):
             if top_cell and bottom_cell:
-                rendered_parts.append("█")
+                rendered_parts.append("\u2588")
             elif top_cell and not bottom_cell:
-                rendered_parts.append("▀")
+                rendered_parts.append("\u2580")
             elif not top_cell and bottom_cell:
-                rendered_parts.append("▄")
+                rendered_parts.append("\u2584")
             else:
                 rendered_parts.append(" ")
         lines.append("".join(rendered_parts).rstrip())
     return lines
+
+
+def render_qr_terminal_lines(matrix: list[list[bool]], module_width: int) -> list[str]:
+    if not matrix:
+        return []
+    dark = "\033[40m"
+    light = "\033[47m"
+    module = " " * max(module_width, 1)
+    lines: list[str] = []
+    for row in matrix:
+        rendered_parts: list[str] = []
+        for cell in row:
+            rendered_parts.append((dark if cell else light) + module)
+        lines.append("".join(rendered_parts) + RESET)
+    return lines
+
+
+def qr_variant_options(link: str) -> dict[str, dict[str, object]]:
+    matrix_border_1 = qr_matrix(link, border=1)
+    matrix_border_0 = qr_matrix(link, border=0)
+    return {
+        "1": {
+            "label": f"Half-block border 1 ({len(matrix_border_1[0])}x{math.ceil(len(matrix_border_1) / 2)}) (current)",
+            "matrix": matrix_border_1,
+            "renderer": "half",
+        },
+        "2": {
+            "label": f"Half-block border 0 ({len(matrix_border_0[0])}x{math.ceil(len(matrix_border_0) / 2)})",
+            "matrix": matrix_border_0,
+            "renderer": "half",
+        },
+        "3": {
+            "label": f"ANSI width 1 border 1 ({len(matrix_border_1[0])}x{len(matrix_border_1)})",
+            "matrix": matrix_border_1,
+            "renderer": "ansi1",
+        },
+        "4": {
+            "label": f"ANSI width 1 border 0 ({len(matrix_border_0[0])}x{len(matrix_border_0)})",
+            "matrix": matrix_border_0,
+            "renderer": "ansi1",
+        },
+    }
+
+
+def show_qr_variant(title: str, link: str, matrix: list[list[bool]], renderer: str, accent: str = GREEN) -> None:
+    if renderer == "half":
+        qr_lines = render_qr_halfblock_lines(matrix)
+    else:
+        qr_lines = render_qr_terminal_lines(matrix, module_width=1)
+
+    width = header_width(title, [link, "Scan this QR code in Telegram."])
+    clear_screen()
+    print_header(title, width, accent=accent)
+    print()
+    print(f"{INDENT}{link}")
+    print()
+    for rendered in qr_lines:
+        print(f"{INDENT}{rendered}")
+    print()
+    print(f"{INDENT}Scan this QR code in Telegram or copy the TG Proxy URL above.")
+    print()
 
 
 def service_state_line(values: dict[str, str], label: str, service: str, enabled_field: str | None = None) -> str:
@@ -695,10 +756,32 @@ def show_tgproxy_qr(values: dict[str, str]) -> None:
         pause()
         return
     try:
-        print_qr_block("TGProxy QR", link, accent=GREEN)
+        variants = qr_variant_options(link)
     except Exception as exc:
         print_block("TGProxy QR", [str(exc)], accent=RED)
-    pause()
+        pause()
+        return
+
+    while True:
+        lines = [f"TG Proxy URL : {link}", ""]
+        for key in ("1", "2", "3", "4"):
+            lines.append(f"{key}. {variants[key]['label']}")
+        lines.extend(["", "0. Back"])
+        print_block("TGProxy QR", lines, accent=GREEN)
+        choice = prompt("Select an option")
+        if choice == "0":
+            return
+        if choice not in variants:
+            continue
+        variant = variants[choice]
+        show_qr_variant(
+            f"TGProxy QR {choice}",
+            link,
+            variant["matrix"],  # type: ignore[arg-type]
+            str(variant["renderer"]),
+            accent=GREEN,
+        )
+        pause()
 
 
 def change_tgproxy_access_code(values: dict[str, str]) -> None:
