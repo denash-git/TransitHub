@@ -348,7 +348,7 @@ def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     if qrcode is None:
         raise RuntimeError("The qrcode runtime dependency is not installed.")
     matrix = qr_matrix(link, border=1)
-    qr_lines = render_qr_terminal_lines(matrix, module_width=1)
+    qr_lines = render_qr_halfblock_lines(matrix)
 
     width = header_width(title, [link, "Scan this QR code in Telegram."])
     clear_screen()
@@ -372,18 +372,24 @@ def qr_matrix(link: str, border: int) -> list[list[bool]]:
     return qr.get_matrix()
 
 
-def render_qr_terminal_lines(matrix: list[list[bool]], module_width: int) -> list[str]:
+def render_qr_halfblock_lines(matrix: list[list[bool]]) -> list[str]:
     if not matrix:
         return []
-    dark = "\033[40m"
-    light = "\033[47m"
     lines: list[str] = []
-    module = " " * max(module_width, 1)
-    for row in matrix:
+    for index in range(0, len(matrix), 2):
+        top = matrix[index]
+        bottom = matrix[index + 1] if index + 1 < len(matrix) else [False] * len(top)
         rendered_parts: list[str] = []
-        for cell in row:
-            rendered_parts.append((dark if cell else light) + module)
-        lines.append("".join(rendered_parts) + RESET)
+        for top_cell, bottom_cell in zip(top, bottom):
+            if top_cell and bottom_cell:
+                rendered_parts.append("█")
+            elif top_cell and not bottom_cell:
+                rendered_parts.append("▀")
+            elif not top_cell and bottom_cell:
+                rendered_parts.append("▄")
+            else:
+                rendered_parts.append(" ")
+        lines.append("".join(rendered_parts).rstrip())
     return lines
 
 
