@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import bcrypt
+import base64
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -427,10 +428,20 @@ def tgproxy_secret(values: dict[str, str]) -> str:
     return values.get("TGPROXY_SECRET", "").strip().lower()
 
 
+def tgproxy_client_secret(values: dict[str, str]) -> str:
+    secret = tgproxy_secret(values)
+    if not secret:
+        return ""
+    try:
+        return base64.urlsafe_b64encode(bytes.fromhex(secret)).decode().rstrip("=")
+    except ValueError:
+        return secret
+
+
 def tgproxy_url(values: dict[str, str]) -> str:
     if not tgproxy_enabled(values):
         return "-"
-    return f"tg://proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_secret(values)}"
+    return f"tg://proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_client_secret(values)}"
 
 
 def tgproxy_secret_parts(values: dict[str, str]) -> tuple[str, str, str]:

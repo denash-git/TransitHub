@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 
 def bool_env(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -30,9 +32,14 @@ def faketls_domain(values: dict[str, str]) -> str:
 def tg_link(values: dict[str, str]) -> str:
     if not enabled(values):
         return ""
+    raw_secret = values.get("TGPROXY_SECRET", "").strip()
+    try:
+        client_secret = base64.urlsafe_b64encode(bytes.fromhex(raw_secret)).decode().rstrip("=")
+    except ValueError:
+        client_secret = raw_secret
     return (
         f"tg://proxy?server={public_host(values)}"
-        f"&port=443&secret={values.get('TGPROXY_SECRET', '').strip()}"
+        f"&port=443&secret={client_secret}"
     )
 
 
