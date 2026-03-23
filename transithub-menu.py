@@ -347,7 +347,7 @@ def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
 def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     if qrcode is None:
         raise RuntimeError("The qrcode runtime dependency is not installed.")
-    qr = qrcode.QRCode(border=2)
+    qr = qrcode.QRCode(border=1)
     qr.add_data(link)
     qr.make(fit=True)
     matrix = qr.get_matrix()
@@ -358,8 +358,20 @@ def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     print()
     print(f"{INDENT}{link}")
     print()
-    for row in matrix:
-        rendered = "".join("██" if cell else "  " for cell in row)
+    for index in range(0, len(matrix), 2):
+        top = matrix[index]
+        bottom = matrix[index + 1] if index + 1 < len(matrix) else [False] * len(top)
+        rendered_parts: list[str] = []
+        for top_cell, bottom_cell in zip(top, bottom):
+            if top_cell and bottom_cell:
+                rendered_parts.append("█")
+            elif top_cell and not bottom_cell:
+                rendered_parts.append("▀")
+            elif not top_cell and bottom_cell:
+                rendered_parts.append("▄")
+            else:
+                rendered_parts.append(" ")
+        rendered = "".join(rendered_parts)
         print(f"{INDENT}{rendered}")
     print()
     print(f"{INDENT}Scan this QR code in Telegram or copy the TG Proxy URL above.")
@@ -419,12 +431,6 @@ def tgproxy_url(values: dict[str, str]) -> str:
     if not tgproxy_enabled(values):
         return "-"
     return f"tg://proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_secret(values)}"
-
-
-def tgproxy_share_url(values: dict[str, str]) -> str:
-    if not tgproxy_enabled(values):
-        return "-"
-    return f"https://t.me/proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_secret(values)}"
 
 
 def tgproxy_secret_parts(values: dict[str, str]) -> tuple[str, str, str]:
@@ -663,13 +669,13 @@ def tgproxy_menu() -> None:
 
 
 def show_tgproxy_qr(values: dict[str, str]) -> None:
-    share_url = tgproxy_share_url(values)
-    if share_url == "-":
+    link = tgproxy_url(values)
+    if link == "-":
         print_block("TGProxy QR", ["TGProxy is disabled or TG Proxy URL is empty."], accent=RED)
         pause()
         return
     try:
-        print_qr_block("TGProxy QR", share_url, accent=GREEN)
+        print_qr_block("TGProxy QR", link, accent=GREEN)
     except Exception as exc:
         print_block("TGProxy QR", [str(exc)], accent=RED)
     pause()
