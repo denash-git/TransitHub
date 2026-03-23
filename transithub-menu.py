@@ -421,6 +421,12 @@ def tgproxy_url(values: dict[str, str]) -> str:
     return f"tg://proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_secret(values)}"
 
 
+def tgproxy_share_url(values: dict[str, str]) -> str:
+    if not tgproxy_enabled(values):
+        return "-"
+    return f"https://t.me/proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_secret(values)}"
+
+
 def tgproxy_secret_parts(values: dict[str, str]) -> tuple[str, str, str]:
     secret = tgproxy_secret(values)
     if not secret.startswith("ee") or len(secret) <= 2 + TGPROXY_CODE_LENGTH:
@@ -657,13 +663,13 @@ def tgproxy_menu() -> None:
 
 
 def show_tgproxy_qr(values: dict[str, str]) -> None:
-    link = tgproxy_url(values)
-    if link == "-":
+    share_url = tgproxy_share_url(values)
+    if share_url == "-":
         print_block("TGProxy QR", ["TGProxy is disabled or TG Proxy URL is empty."], accent=RED)
         pause()
         return
     try:
-        print_qr_block("TGProxy QR", link, accent=GREEN)
+        print_qr_block("TGProxy QR", share_url, accent=GREEN)
     except Exception as exc:
         print_block("TGProxy QR", [str(exc)], accent=RED)
     pause()
