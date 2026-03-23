@@ -11,11 +11,6 @@ import sys
 import tempfile
 import time
 
-try:
-    import qrcode
-except ModuleNotFoundError:
-    qrcode = None
-
 from .certbot import CertbotError
 from .certbot import certificate_status
 from .certbot import ensure_certificate
@@ -737,43 +732,6 @@ def warn(message: str) -> None:
     print(f"{RED}  ! {message}{RESET}")
 
 
-def qr_matrix(link: str, border: int) -> list[list[bool]]:
-    if qrcode is None:
-        raise RuntimeError("The qrcode installer dependency is not installed.")
-    qr = qrcode.QRCode(border=border)
-    qr.add_data(link)
-    qr.make(fit=True)
-    return qr.get_matrix()
-
-
-def render_qr_terminal_lines(matrix: list[list[bool]], module_width: int) -> list[str]:
-    if not matrix:
-        return []
-    dark = "\033[40m"
-    light = "\033[47m"
-    lines: list[str] = []
-    module = " " * max(module_width, 1)
-    for row in matrix:
-        rendered_parts: list[str] = []
-        for cell in row:
-            rendered_parts.append((dark if cell else light) + module)
-        lines.append("".join(rendered_parts) + RESET)
-    return lines
-
-
-def print_tgproxy_summary_qr(link: str) -> tuple[int, int]:
-    matrix = qr_matrix(link, border=1)
-    lines = render_qr_terminal_lines(matrix, module_width=1)
-    if not lines:
-        return (0, 0)
-    print("TG Proxy QR")
-    print()
-    for line in lines:
-        print(f"  {line}")
-    print()
-    return (len(matrix[0]), len(matrix))
-
-
 def print_summary(values: dict[str, str]) -> None:
     panel_url = f"https://{values['DOMAIN']}/{values['PANEL_PATH']}/"
     sub_url = f"https://{values['DOMAIN']}/{values['SUB_PATH']}/first"
@@ -815,13 +773,6 @@ def print_summary(values: dict[str, str]) -> None:
         print(f"| {line.ljust(width - 1)}|")
     print("+" + "-" * width + "+")
     print()
-    if tgproxy_enabled(values):
-        try:
-            qr_width, qr_height = print_tgproxy_summary_qr(tgproxy_tg_link(values))
-            print(f"TG Proxy QR size: {qr_width} x {qr_height} chars")
-            print()
-        except Exception as exc:
-            warn(f"Could not render TG Proxy QR code: {exc}")
 
 
 def prune_deployed_tree() -> None:

@@ -5,7 +5,6 @@ import bcrypt
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-import math
 import os
 import secrets
 import shutil
@@ -393,64 +392,6 @@ def render_qr_halfblock_lines(matrix: list[list[bool]]) -> list[str]:
     return lines
 
 
-def downsample_qr_matrix(matrix: list[list[bool]], factor: int) -> list[list[bool]]:
-    if factor <= 1 or not matrix:
-        return matrix
-    height = len(matrix)
-    width = len(matrix[0])
-    reduced: list[list[bool]] = []
-    for top in range(0, height, factor):
-        row: list[bool] = []
-        for left in range(0, width, factor):
-            cell = False
-            for y in range(top, min(top + factor, height)):
-                for x in range(left, min(left + factor, width)):
-                    cell = cell or matrix[y][x]
-            row.append(cell)
-        reduced.append(row)
-    return reduced
-
-
-def qr_variant_options(link: str) -> dict[str, dict[str, object]]:
-    matrix_border_1 = qr_matrix(link, border=1)
-    matrix_border_0 = qr_matrix(link, border=0)
-    matrix_downsample_2 = downsample_qr_matrix(matrix_border_0, factor=2)
-    matrix_downsample_3 = downsample_qr_matrix(matrix_border_0, factor=3)
-    return {
-        "1": {
-            "label": f"Half-block border 1 ({len(matrix_border_1[0])}x{math.ceil(len(matrix_border_1) / 2)}) (current)",
-            "matrix": matrix_border_1,
-        },
-        "2": {
-            "label": f"Half-block border 0 ({len(matrix_border_0[0])}x{math.ceil(len(matrix_border_0) / 2)})",
-            "matrix": matrix_border_0,
-        },
-        "3": {
-            "label": f"Half-block downsample x2 ({len(matrix_downsample_2[0])}x{math.ceil(len(matrix_downsample_2) / 2)})",
-            "matrix": matrix_downsample_2,
-        },
-        "4": {
-            "label": f"Half-block downsample x3 ({len(matrix_downsample_3[0])}x{math.ceil(len(matrix_downsample_3) / 2)})",
-            "matrix": matrix_downsample_3,
-        },
-    }
-
-
-def show_qr_variant(title: str, link: str, matrix: list[list[bool]], accent: str = GREEN) -> None:
-    qr_lines = render_qr_halfblock_lines(matrix)
-    width = header_width(title, [link, "Scan this QR code in Telegram."])
-    clear_screen()
-    print_header(title, width, accent=accent)
-    print()
-    print(f"{INDENT}{link}")
-    print()
-    for rendered in qr_lines:
-        print(f"{INDENT}{rendered}")
-    print()
-    print(f"{INDENT}Scan this QR code in Telegram or copy the TG Proxy URL above.")
-    print()
-
-
 def service_state_line(values: dict[str, str], label: str, service: str, enabled_field: str | None = None) -> str:
     if enabled_field and not bool_env(values.get(enabled_field)):
         return f"{label:<13}: disabled"
@@ -753,31 +694,10 @@ def show_tgproxy_qr(values: dict[str, str]) -> None:
         pause()
         return
     try:
-        variants = qr_variant_options(link)
+        print_qr_block("TGProxy QR", link, accent=GREEN)
     except Exception as exc:
         print_block("TGProxy QR", [str(exc)], accent=RED)
-        pause()
-        return
-
-    while True:
-        lines = [f"TG Proxy URL : {link}", ""]
-        for key in ("1", "2", "3", "4"):
-            lines.append(f"{key}. {variants[key]['label']}")
-        lines.extend(["", "0. Back"])
-        print_block("TGProxy QR", lines, accent=GREEN)
-        choice = prompt("Select an option")
-        if choice == "0":
-            return
-        if choice not in variants:
-            continue
-        variant = variants[choice]
-        show_qr_variant(
-            f"TGProxy QR {choice}",
-            link,
-            variant["matrix"],  # type: ignore[arg-type]
-            accent=GREEN,
-        )
-        pause()
+    pause()
 
 
 def change_tgproxy_access_code(values: dict[str, str]) -> None:
