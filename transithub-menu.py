@@ -348,7 +348,7 @@ def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     if qrcode is None:
         raise RuntimeError("The qrcode runtime dependency is not installed.")
     matrix = qr_matrix(link, border=1)
-    qr_lines = render_qr_terminal_lines(matrix, module_width=2)
+    qr_lines = render_qr_terminal_lines(matrix, module_width=1)
 
     width = header_width(title, [link, "Scan this QR code in Telegram."])
     clear_screen()
