@@ -342,7 +342,7 @@ def ensure_menu_launcher() -> None:
 
 
 def ensure_runtime_menu_venv() -> None:
-    packages = ["bcrypt"]
+    packages = ["bcrypt", "qrcode"]
     if not TRANSITHUB_RUNTIME_PYTHON.exists():
         log(f"Create TransitHub runtime venv in {TRANSITHUB_RUNTIME_VENV_DIR}")
         if TRANSITHUB_RUNTIME_VENV_DIR.exists():

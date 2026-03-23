@@ -13,6 +13,11 @@ import sqlite3
 import string
 import subprocess
 
+try:
+    import qrcode
+except ModuleNotFoundError:
+    qrcode = None
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 INSTANCE_ENV_PATH = PROJECT_ROOT / "instance.env"
@@ -339,6 +344,28 @@ def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
     print()
 
 
+def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
+    if qrcode is None:
+        raise RuntimeError("The qrcode runtime dependency is not installed.")
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(link)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()
+
+    width = header_width(title, [link, "Scan this QR code in Telegram."])
+    clear_screen()
+    print_header(title, width, accent=accent)
+    print()
+    print(f"{INDENT}{link}")
+    print()
+    for row in matrix:
+        rendered = "".join("██" if cell else "  " for cell in row)
+        print(f"{INDENT}{rendered}")
+    print()
+    print(f"{INDENT}Scan this QR code in Telegram or copy the TG Proxy URL above.")
+    print()
+
+
 def service_state_line(values: dict[str, str], label: str, service: str, enabled_field: str | None = None) -> str:
     if enabled_field and not bool_env(values.get(enabled_field)):
         return f"{label:<13}: disabled"
@@ -603,27 +630,43 @@ def tgproxy_menu() -> None:
             f"Access code      : {code}",
             f"TG Proxy URL     : {tgproxy_url(values)}",
             "",
-            "1. Rotate access code",
-            "2. Show TGProxy logs",
-            "3. Start TGProxy",
-            "4. Stop TGProxy",
-            "5. Restart TGProxy",
+            "1. Show TGProxy QR code",
+            "2. Rotate access code",
+            "3. Show TGProxy logs",
+            "4. Start TGProxy",
+            "5. Stop TGProxy",
+            "6. Restart TGProxy",
             "0. Back",
         ]
         print_block("TGProxy", lines, accent=GREEN)
         choice = prompt("Select an option")
         if choice == "1":
-            change_tgproxy_access_code(values)
+            show_tgproxy_qr(values)
         elif choice == "2":
-            tail_service_logs(values, "tgproxy")
+            change_tgproxy_access_code(values)
         elif choice == "3":
-            service_start(values, "tgproxy", "TGProxy")
+            tail_service_logs(values, "tgproxy")
         elif choice == "4":
-            service_stop(values, "tgproxy", "TGProxy")
+            service_start(values, "tgproxy", "TGProxy")
         elif choice == "5":
+            service_stop(values, "tgproxy", "TGProxy")
+        elif choice == "6":
             service_restart(values, "tgproxy", "TGProxy")
         elif choice == "0":
             return
+
+
+def show_tgproxy_qr(values: dict[str, str]) -> None:
+    link = tgproxy_url(values)
+    if link == "-":
+        print_block("TGProxy QR", ["TGProxy is disabled or TG Proxy URL is empty."], accent=RED)
+        pause()
+        return
+    try:
+        print_qr_block("TGProxy QR", link, accent=GREEN)
+    except Exception as exc:
+        print_block("TGProxy QR", [str(exc)], accent=RED)
+    pause()
 
 
 def change_tgproxy_access_code(values: dict[str, str]) -> None:
