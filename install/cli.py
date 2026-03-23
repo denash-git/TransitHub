@@ -16,6 +16,7 @@ from .certbot import certificate_status
 from .certbot import ensure_certificate
 from .host import ensure_menu_launcher
 from .host import ensure_netbird_host_ready
+from .host import ensure_runtime_menu_venv
 from .netbird import enabled as netbird_enabled
 from .tgproxy import enabled as tgproxy_enabled
 from .tgproxy import tg_link as tgproxy_tg_link
@@ -172,6 +173,8 @@ def run_install() -> int:
     note("Remove installer-only sources from deployed VPS tree")
     run([str(python), str(PROJECT_ROOT / "install" / "cleanup.py")])
     prune_deployed_tree()
+    note("Install TransitHub runtime Python environment")
+    ensure_runtime_menu_venv()
     note("Install local runtime launcher `menu`")
     ensure_menu_launcher()
     print_summary(values)

@@ -30,6 +30,7 @@ NGINX_STOP_SCRIPT = Path("/usr/local/bin/transithub-nginx-stop")
 NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
 NGINX_RELOAD_SCRIPT = Path("/usr/local/bin/transithub-nginx-reload")
 XUI_DB_PATH = PROJECT_ROOT / "xui" / "data" / "x-ui.db"
+NGINX_SITE_CONF_PATH = PROJECT_ROOT / "nginx" / "config" / "site.conf"
 
 BLUE = "\033[1;34m"
 GREEN = "\033[1;32m"
@@ -43,6 +44,7 @@ MAX_HEADER_WIDTH = 78
 INDENT = "      "
 USERNAME_LENGTH = 10
 PASSWORD_LENGTH = 20
+PANEL_PATH_LENGTH = 16
 
 
 def main() -> int:
@@ -149,6 +151,10 @@ def random_username(length: int = USERNAME_LENGTH) -> str:
     return secrets.choice(string.ascii_lowercase) + random_token(length - 1)
 
 
+def random_panel_path(length: int = PANEL_PATH_LENGTH) -> str:
+    return random_token(length)
+
+
 def prompt_fixed_length_value(
     title: str,
     label: str,
@@ -172,6 +178,31 @@ def prompt_fixed_length_value(
         if len(entered) == length:
             return entered
         error = f"{label} must contain exactly {length} characters. Try again."
+
+
+def prompt_panel_path_value(current: str) -> str:
+    default = random_panel_path(max(len(current), PANEL_PATH_LENGTH))
+    error = ""
+    while True:
+        lines = [
+            "Press Enter to accept the generated default value.",
+            "Panel path must contain only lowercase letters and digits.",
+            f"Required length: {len(default)} characters.",
+            "",
+        ]
+        if error:
+            lines.extend([f"{RED}{error}{RESET}", ""])
+        print_block("3x-ui Panel Path", lines, accent=YELLOW)
+        entered = input(f"New panel path [{default}]: ").strip()
+        if not entered:
+            return default
+        if len(entered) != len(default):
+            error = f"Panel path must contain exactly {len(default)} characters."
+            continue
+        if any(ch not in (string.ascii_lowercase + string.digits) for ch in entered):
+            error = "Panel path can use only lowercase letters and digits."
+            continue
+        return entered
 
 
 def credential_updated_lines(label: str, value: str) -> list[str]:
@@ -377,6 +408,23 @@ def update_xui_db_credentials(username: str | None = None, password: str | None 
     return target_username
 
 
+def upsert_xui_setting(key: str, value: str) -> None:
+    if not XUI_DB_PATH.exists():
+        raise FileNotFoundError(f"x-ui database was not found: {XUI_DB_PATH}")
+
+    conn = sqlite3.connect(XUI_DB_PATH)
+    try:
+        cur = conn.cursor()
+        row = cur.execute("SELECT id FROM settings WHERE key = ? LIMIT 1", (key,)).fetchone()
+        if row:
+            cur.execute("UPDATE settings SET value = ? WHERE id = ?", (value, int(row[0])))
+        else:
+            cur.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def render_main_menu(values: dict[str, str]) -> None:
     lines = [
         service_state_line(values, "nginx", "nginx"),
@@ -543,11 +591,12 @@ def xui_menu() -> None:
             "1. Show stored settings",
             "2. Change username",
             "3. Change password",
-            "4. Show x-ui logs",
-            "5. Start x-ui",
-            "6. Stop x-ui",
-            "7. Restart x-ui",
-            "8. Open x-ui shell",
+            "4. Change panel path",
+            "5. Show x-ui logs",
+            "6. Start x-ui",
+            "7. Stop x-ui",
+            "8. Restart x-ui",
+            "9. Open x-ui shell",
             "0. Back",
         ]
         print_block("3x-ui", lines, accent=YELLOW)
@@ -559,14 +608,16 @@ def xui_menu() -> None:
         elif choice == "3":
             change_xui_password(values)
         elif choice == "4":
-            tail_service_logs(values, "xui")
+            change_xui_panel_path(values)
         elif choice == "5":
-            service_start(values, "xui", "x-ui")
+            tail_service_logs(values, "xui")
         elif choice == "6":
-            service_stop(values, "xui", "x-ui")
+            service_start(values, "xui", "x-ui")
         elif choice == "7":
-            service_restart(values, "xui", "x-ui")
+            service_stop(values, "xui", "x-ui")
         elif choice == "8":
+            service_restart(values, "xui", "x-ui")
+        elif choice == "9":
             open_xui_shell(values)
         elif choice == "0":
             return
@@ -652,6 +703,92 @@ def change_xui_password(values: dict[str, str]) -> None:
         print_block("3x-ui Update Failed", [completed.stdout, completed.stderr], accent=RED)
     else:
         print_block("3x-ui Password", credential_updated_lines("Password", new_password), accent=GREEN)
+    pause()
+
+
+def update_site_conf_panel_path(old_path: str, new_path: str) -> tuple[str, str]:
+    if not NGINX_SITE_CONF_PATH.exists():
+        raise FileNotFoundError(f"Nginx site config was not found: {NGINX_SITE_CONF_PATH}")
+
+    original = NGINX_SITE_CONF_PATH.read_text(encoding="utf-8")
+    replaced = original.replace(f"/{old_path}", f"/{new_path}")
+    if replaced == original:
+        raise ValueError(f"Panel path /{old_path} was not found in {NGINX_SITE_CONF_PATH}.")
+    NGINX_SITE_CONF_PATH.write_text(replaced, encoding="utf-8")
+    return original, replaced
+
+
+def nginx_test_and_reload(values: dict[str, str]) -> None:
+    container = service_container_name(values, "nginx", include_stopped=True)
+    if not container:
+        raise RuntimeError("nginx container is not available.")
+    test = run(["docker", "exec", container, "nginx", "-t"])
+    if test.returncode != 0:
+        raise RuntimeError((test.stdout or "") + (test.stderr or ""))
+    reload_result = run(["docker", "exec", container, "nginx", "-s", "reload"])
+    if reload_result.returncode != 0:
+        raise RuntimeError((reload_result.stdout or "") + (reload_result.stderr or ""))
+
+
+def change_xui_panel_path(values: dict[str, str]) -> None:
+    xui_container = require_xui_container(values)
+    if not xui_container:
+        return
+
+    db_state = xui_db_state()
+    current_db_path = db_state.get("webBasePath", "").strip("/")
+    current_env_path = values.get("PANEL_PATH", "").strip("/")
+    current_path = current_db_path or current_env_path
+    if not current_path:
+        print_block("3x-ui Update Failed", ["Current panel path is empty."], accent=RED)
+        pause()
+        return
+
+    new_path = prompt_panel_path_value(current_path)
+    if new_path == current_path:
+        print_block("3x-ui Panel Path", ["Panel path was not changed."], accent=RED)
+        pause()
+        return
+
+    original_site_conf = ""
+    original_env = INSTANCE_ENV_PATH.read_text(encoding="utf-8")
+    try:
+        upsert_xui_setting("webBasePath", f"/{new_path}/")
+        update_env(INSTANCE_ENV_PATH, {"PANEL_PATH": new_path})
+        original_site_conf, _ = update_site_conf_panel_path(current_env_path or current_path, new_path)
+
+        restart_result = run(["docker", "restart", xui_container])
+        if restart_result.returncode != 0:
+            raise RuntimeError((restart_result.stdout or "") + (restart_result.stderr or ""))
+
+        nginx_test_and_reload(parse_env(INSTANCE_ENV_PATH))
+    except Exception as exc:
+        try:
+            upsert_xui_setting("webBasePath", f"/{current_path}/")
+        except Exception:
+            pass
+        INSTANCE_ENV_PATH.write_text(original_env, encoding="utf-8")
+        if original_site_conf:
+            NGINX_SITE_CONF_PATH.write_text(original_site_conf, encoding="utf-8")
+        if xui_container:
+            run(["docker", "restart", xui_container])
+        try:
+            nginx_test_and_reload(parse_env(INSTANCE_ENV_PATH))
+        except Exception:
+            pass
+        print_block("3x-ui Update Failed", [str(exc)], accent=RED)
+        pause()
+        return
+
+    lines = [
+        "Panel path updated successfully.",
+        "",
+        f"New panel path : /{new_path}/",
+        f"Panel URL      : {panel_url(parse_env(INSTANCE_ENV_PATH), xui_db_state())}",
+        "",
+        f"{YELLOW}Save the new panel URL now. The old panel path is no longer valid.{RESET}",
+    ]
+    print_block("3x-ui Panel Path", lines, accent=GREEN)
     pause()
 
 

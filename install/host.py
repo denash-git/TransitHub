@@ -14,7 +14,6 @@ APT_BASE_PACKAGES = [
     "gnupg",
     "lsb-release",
     "openssl",
-    "python3-bcrypt",
     "python3",
     "python3-venv",
     "python3-pip",
@@ -37,6 +36,9 @@ UFW_RULES = [
 CERTBOT_VENV_DIR = Path("/opt/certbot")
 CERTBOT_BIN = CERTBOT_VENV_DIR / "bin" / "certbot"
 CERTBOT_SYMLINK = Path("/usr/local/bin/certbot")
+TRANSITHUB_RUNTIME_DIR = Path("/opt/transithub")
+TRANSITHUB_RUNTIME_VENV_DIR = TRANSITHUB_RUNTIME_DIR / "venv"
+TRANSITHUB_RUNTIME_PYTHON = TRANSITHUB_RUNTIME_VENV_DIR / "bin" / "python"
 TRANSITHUB_RENEW_SCRIPT = Path("/usr/local/bin/transithub-certbot-renew")
 TRANSITHUB_NGINX_STOP_SCRIPT = Path("/usr/local/bin/transithub-nginx-stop")
 TRANSITHUB_NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
@@ -327,11 +329,30 @@ def ensure_menu_launcher() -> None:
                 "#!/usr/bin/env bash",
                 "set -euo pipefail",
                 f"project_root={str(paths.PROJECT_ROOT)!r}",
-                'exec python3 "${project_root}/transithub-menu.py" "$@"',
+                f"runtime_python={str(TRANSITHUB_RUNTIME_PYTHON)!r}",
+                'if [[ ! -x "$runtime_python" ]]; then',
+                '  printf "TransitHub runtime environment is missing: %s\\n" "$runtime_python" >&2',
+                "  exit 1",
+                "fi",
+                'exec "$runtime_python" "${project_root}/transithub-menu.py" "$@"',
             ]
         )
         + "\n",
     )
+
+
+def ensure_runtime_menu_venv() -> None:
+    packages = ["bcrypt"]
+    if not TRANSITHUB_RUNTIME_PYTHON.exists():
+        log(f"Create TransitHub runtime venv in {TRANSITHUB_RUNTIME_VENV_DIR}")
+        if TRANSITHUB_RUNTIME_VENV_DIR.exists():
+            shutil.rmtree(TRANSITHUB_RUNTIME_VENV_DIR, ignore_errors=True)
+        TRANSITHUB_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        run(["python3", "-m", "venv", str(TRANSITHUB_RUNTIME_VENV_DIR)])
+
+    log("Install TransitHub runtime Python dependencies")
+    run([str(TRANSITHUB_RUNTIME_PYTHON), "-m", "pip", "install", "--upgrade", "pip"])
+    run([str(TRANSITHUB_RUNTIME_PYTHON), "-m", "pip", "install", *packages])
 
 
 def install_compose_support() -> bool:
