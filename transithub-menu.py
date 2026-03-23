@@ -347,10 +347,8 @@ def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
 def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     if qrcode is None:
         raise RuntimeError("The qrcode runtime dependency is not installed.")
-    qr = qrcode.QRCode(border=1)
-    qr.add_data(link)
-    qr.make(fit=True)
-    matrix = qr.get_matrix()
+    matrix = qr_matrix(link, border=1)
+    qr_lines = render_qr_braille_lines(matrix)
 
     width = header_width(title, [link, "Scan this QR code in Telegram."])
     clear_screen()
@@ -358,24 +356,51 @@ def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
     print()
     print(f"{INDENT}{link}")
     print()
-    for index in range(0, len(matrix), 2):
-        top = matrix[index]
-        bottom = matrix[index + 1] if index + 1 < len(matrix) else [False] * len(top)
-        rendered_parts: list[str] = []
-        for top_cell, bottom_cell in zip(top, bottom):
-            if top_cell and bottom_cell:
-                rendered_parts.append("█")
-            elif top_cell and not bottom_cell:
-                rendered_parts.append("▀")
-            elif not top_cell and bottom_cell:
-                rendered_parts.append("▄")
-            else:
-                rendered_parts.append(" ")
-        rendered = "".join(rendered_parts)
+    for rendered in qr_lines:
         print(f"{INDENT}{rendered}")
     print()
     print(f"{INDENT}Scan this QR code in Telegram or copy the TG Proxy URL above.")
     print()
+
+
+def qr_matrix(link: str, border: int) -> list[list[bool]]:
+    if qrcode is None:
+        raise RuntimeError("The qrcode runtime dependency is not installed.")
+    qr = qrcode.QRCode(border=border)
+    qr.add_data(link)
+    qr.make(fit=True)
+    return qr.get_matrix()
+
+
+def render_qr_braille_lines(matrix: list[list[bool]]) -> list[str]:
+    if not matrix:
+        return []
+    height = len(matrix)
+    width = len(matrix[0])
+    lines: list[str] = []
+    for top in range(0, height, 4):
+        rendered_parts: list[str] = []
+        for left in range(0, width, 2):
+            pattern = 0
+            if top < height and left < width and matrix[top][left]:
+                pattern |= 0x01
+            if top + 1 < height and left < width and matrix[top + 1][left]:
+                pattern |= 0x02
+            if top + 2 < height and left < width and matrix[top + 2][left]:
+                pattern |= 0x04
+            if top + 3 < height and left < width and matrix[top + 3][left]:
+                pattern |= 0x40
+            if top < height and left + 1 < width and matrix[top][left + 1]:
+                pattern |= 0x08
+            if top + 1 < height and left + 1 < width and matrix[top + 1][left + 1]:
+                pattern |= 0x10
+            if top + 2 < height and left + 1 < width and matrix[top + 2][left + 1]:
+                pattern |= 0x20
+            if top + 3 < height and left + 1 < width and matrix[top + 3][left + 1]:
+                pattern |= 0x80
+            rendered_parts.append(" " if pattern == 0 else chr(0x2800 + pattern))
+        lines.append("".join(rendered_parts).rstrip())
+    return lines
 
 
 def service_state_line(values: dict[str, str], label: str, service: str, enabled_field: str | None = None) -> str:
@@ -648,7 +673,7 @@ def tgproxy_menu() -> None:
             f"TG Proxy URL     : {tgproxy_url(values)}",
             "",
             "1. Show TGProxy QR code",
-            "2. Rotate access code",
+            "2. Change access code",
             "3. Show TGProxy logs",
             "4. Start TGProxy",
             "5. Stop TGProxy",

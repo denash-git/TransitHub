@@ -11,6 +11,11 @@ import sys
 import tempfile
 import time
 
+try:
+    import qrcode
+except ModuleNotFoundError:
+    qrcode = None
+
 from .certbot import CertbotError
 from .certbot import certificate_status
 from .certbot import ensure_certificate
@@ -732,6 +737,76 @@ def warn(message: str) -> None:
     print(f"{RED}  ! {message}{RESET}")
 
 
+def qr_matrix(link: str, border: int) -> list[list[bool]]:
+    if qrcode is None:
+        raise RuntimeError("The qrcode installer dependency is not installed.")
+    qr = qrcode.QRCode(border=border)
+    qr.add_data(link)
+    qr.make(fit=True)
+    return qr.get_matrix()
+
+
+def render_qr_braille_lines(matrix: list[list[bool]]) -> list[str]:
+    if not matrix:
+        return []
+    height = len(matrix)
+    width = len(matrix[0])
+    lines: list[str] = []
+    for top in range(0, height, 4):
+        rendered_parts: list[str] = []
+        for left in range(0, width, 2):
+            pattern = 0
+            if top < height and left < width and matrix[top][left]:
+                pattern |= 0x01
+            if top + 1 < height and left < width and matrix[top + 1][left]:
+                pattern |= 0x02
+            if top + 2 < height and left < width and matrix[top + 2][left]:
+                pattern |= 0x04
+            if top + 3 < height and left < width and matrix[top + 3][left]:
+                pattern |= 0x40
+            if top < height and left + 1 < width and matrix[top][left + 1]:
+                pattern |= 0x08
+            if top + 1 < height and left + 1 < width and matrix[top + 1][left + 1]:
+                pattern |= 0x10
+            if top + 2 < height and left + 1 < width and matrix[top + 2][left + 1]:
+                pattern |= 0x20
+            if top + 3 < height and left + 1 < width and matrix[top + 3][left + 1]:
+                pattern |= 0x80
+            rendered_parts.append(" " if pattern == 0 else chr(0x2800 + pattern))
+        lines.append("".join(rendered_parts).rstrip())
+    return lines
+
+
+def downsample_qr_matrix(matrix: list[list[bool]], factor: int) -> list[list[bool]]:
+    if factor <= 1 or not matrix:
+        return matrix
+    height = len(matrix)
+    width = len(matrix[0])
+    reduced: list[list[bool]] = []
+    for top in range(0, height, factor):
+        row: list[bool] = []
+        for left in range(0, width, factor):
+            cell = False
+            for y in range(top, min(top + factor, height)):
+                for x in range(left, min(left + factor, width)):
+                    cell = cell or matrix[y][x]
+            row.append(cell)
+        reduced.append(row)
+    return reduced
+
+
+def print_tgproxy_summary_qr(link: str) -> tuple[int, int]:
+    lines = render_qr_braille_lines(downsample_qr_matrix(qr_matrix(link, border=0), factor=2))
+    if not lines:
+        return (0, 0)
+    print("TG Proxy QR")
+    print()
+    for line in lines:
+        print(f"  {line}")
+    print()
+    return (max(len(line) for line in lines), len(lines))
+
+
 def print_summary(values: dict[str, str]) -> None:
     panel_url = f"https://{values['DOMAIN']}/{values['PANEL_PATH']}/"
     sub_url = f"https://{values['DOMAIN']}/{values['SUB_PATH']}/first"
@@ -773,6 +848,13 @@ def print_summary(values: dict[str, str]) -> None:
         print(f"| {line.ljust(width - 1)}|")
     print("+" + "-" * width + "+")
     print()
+    if tgproxy_enabled(values):
+        try:
+            qr_width, qr_height = print_tgproxy_summary_qr(tgproxy_tg_link(values))
+            print(f"TG Proxy QR size: {qr_width} x {qr_height} chars")
+            print()
+        except Exception as exc:
+            warn(f"Could not render TG Proxy QR code: {exc}")
 
 
 def prune_deployed_tree() -> None:
