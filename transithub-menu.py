@@ -45,6 +45,7 @@ INDENT = "      "
 USERNAME_LENGTH = 10
 PASSWORD_LENGTH = 20
 PANEL_PATH_LENGTH = 16
+TGPROXY_CODE_LENGTH = 32
 
 
 def main() -> int:
@@ -70,13 +71,7 @@ def main() -> int:
                 enabled=bool_env(values.get("ENABLE_SUBCONVERTER")),
             )
         elif choice == "4":
-            simple_service_menu(
-                values,
-                title="TGProxy",
-                service="tgproxy",
-                accent=GREEN,
-                enabled=bool_env(values.get("ENABLE_TGPROXY")),
-            )
+            tgproxy_menu()
         elif choice == "5":
             netbird_menu()
         elif choice == "6":
@@ -155,6 +150,10 @@ def random_panel_path(length: int = PANEL_PATH_LENGTH) -> str:
     return random_token(length)
 
 
+def random_hex_token(length: int) -> str:
+    return random_token(length, "0123456789abcdef")
+
+
 def prompt_fixed_length_value(
     title: str,
     label: str,
@@ -201,6 +200,31 @@ def prompt_panel_path_value(current: str) -> str:
             continue
         if any(ch not in (string.ascii_lowercase + string.digits) for ch in entered):
             error = "Panel path can use only lowercase letters and digits."
+            continue
+        return entered
+
+
+def prompt_tgproxy_access_code(current_code: str) -> str:
+    default = random_hex_token(TGPROXY_CODE_LENGTH)
+    error = ""
+    while True:
+        lines = [
+            "Press Enter to accept the generated default value.",
+            f"Current code     : {current_code}",
+            f"Required format  : {TGPROXY_CODE_LENGTH} lowercase hexadecimal characters.",
+            "",
+        ]
+        if error:
+            lines.extend([f"{RED}{error}{RESET}", ""])
+        print_block("TGProxy Access Code", lines, accent=GREEN)
+        entered = input(f"New access code [{default}]: ").strip().lower()
+        if not entered:
+            return default
+        if len(entered) != TGPROXY_CODE_LENGTH:
+            error = f"Access code must contain exactly {TGPROXY_CODE_LENGTH} characters."
+            continue
+        if any(ch not in "0123456789abcdef" for ch in entered):
+            error = "Access code can use only lowercase hexadecimal characters."
             continue
         return entered
 
@@ -346,6 +370,67 @@ def xui_db_state() -> dict[str, str]:
     finally:
         conn.close()
     return state
+
+
+def tgproxy_enabled(values: dict[str, str]) -> bool:
+    return bool_env(values.get("ENABLE_TGPROXY")) and bool(values.get("TGPROXY_PUBLIC_HOST", "").strip())
+
+
+def tgproxy_public_host(values: dict[str, str]) -> str:
+    return values.get("TGPROXY_PUBLIC_HOST", "").strip() or values.get("DOMAIN", "").strip()
+
+
+def tgproxy_faketls_domain(values: dict[str, str]) -> str:
+    return values.get("TGPROXY_FAKETLS_DOMAIN", "").strip() or tgproxy_public_host(values)
+
+
+def tgproxy_secret(values: dict[str, str]) -> str:
+    return values.get("TGPROXY_SECRET", "").strip().lower()
+
+
+def tgproxy_url(values: dict[str, str]) -> str:
+    if not tgproxy_enabled(values):
+        return "-"
+    return f"tg://proxy?server={tgproxy_public_host(values)}&port=443&secret={tgproxy_secret(values)}"
+
+
+def tgproxy_secret_parts(values: dict[str, str]) -> tuple[str, str, str]:
+    secret = tgproxy_secret(values)
+    if not secret.startswith("ee") or len(secret) <= 2 + TGPROXY_CODE_LENGTH:
+        raise ValueError("Current TGProxy secret is invalid.")
+    prefix = "ee"
+    code = secret[2 : 2 + TGPROXY_CODE_LENGTH]
+    domain_hex = secret[2 + TGPROXY_CODE_LENGTH :]
+    return prefix, code, domain_hex
+
+
+def build_tgproxy_secret(access_code: str, fake_tls_domain: str) -> str:
+    normalized_code = access_code.strip().lower()
+    if len(normalized_code) != TGPROXY_CODE_LENGTH or any(ch not in "0123456789abcdef" for ch in normalized_code):
+        raise ValueError(f"TGProxy access code must be exactly {TGPROXY_CODE_LENGTH} hexadecimal characters.")
+    normalized_domain = fake_tls_domain.strip().lower()
+    if not normalized_domain:
+        raise ValueError("TGProxy FakeTLS domain is empty.")
+    return f"ee{normalized_code}{normalized_domain.encode('utf-8').hex()}"
+
+
+def update_tgproxy_config_secret(new_secret: str) -> None:
+    config_path = PROJECT_ROOT / "tgproxy" / "config.toml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"TGProxy config was not found: {config_path}")
+    original = config_path.read_text(encoding="utf-8")
+    current_line_prefix = 'secret = "'
+    replaced = False
+    rendered: list[str] = []
+    for line in original.splitlines():
+        if line.startswith(current_line_prefix):
+            rendered.append(f'secret = "{new_secret}"')
+            replaced = True
+        else:
+            rendered.append(line)
+    if not replaced:
+        raise ValueError("Could not find TGProxy secret line in config.toml.")
+    config_path.write_text("\n".join(rendered) + "\n", encoding="utf-8")
 
 
 def xui_user_record() -> dict[str, object]:
@@ -497,6 +582,106 @@ def show_netbird_status(values: dict[str, str]) -> None:
     completed = run(["docker", "exec", container, "netbird", "status"])
     output = (completed.stdout or completed.stderr or "No output").splitlines()
     print_block("NetBird Status", output[:40], accent=GREEN)
+    pause()
+
+
+def tgproxy_menu() -> None:
+    while True:
+        values = parse_env(INSTANCE_ENV_PATH)
+        enabled = tgproxy_enabled(values)
+        container = service_container_name(values, "tgproxy", include_stopped=True)
+        running = service_is_running(container)
+        try:
+            _, code, _ = tgproxy_secret_parts(values)
+        except Exception:
+            code = "-"
+        lines = [
+            f"Container        : {container or 'not running'}",
+            f"Status           : {status_badge(running, 'running' if running else 'stopped') if enabled else 'disabled'}",
+            f"Public host      : {tgproxy_public_host(values) or '-'}",
+            f"FakeTLS domain   : {tgproxy_faketls_domain(values) or '-'}",
+            f"Access code      : {code}",
+            f"TG Proxy URL     : {tgproxy_url(values)}",
+            "",
+            "1. Rotate access code",
+            "2. Show TGProxy logs",
+            "3. Start TGProxy",
+            "4. Stop TGProxy",
+            "5. Restart TGProxy",
+            "0. Back",
+        ]
+        print_block("TGProxy", lines, accent=GREEN)
+        choice = prompt("Select an option")
+        if choice == "1":
+            change_tgproxy_access_code(values)
+        elif choice == "2":
+            tail_service_logs(values, "tgproxy")
+        elif choice == "3":
+            service_start(values, "tgproxy", "TGProxy")
+        elif choice == "4":
+            service_stop(values, "tgproxy", "TGProxy")
+        elif choice == "5":
+            service_restart(values, "tgproxy", "TGProxy")
+        elif choice == "0":
+            return
+
+
+def change_tgproxy_access_code(values: dict[str, str]) -> None:
+    if not tgproxy_enabled(values):
+        print_block("TGProxy", ["TGProxy is disabled in instance.env."], accent=RED)
+        pause()
+        return
+
+    container = service_container_name(values, "tgproxy", include_stopped=True)
+    if not container:
+        print_block("TGProxy", ["TGProxy container is not available."], accent=RED)
+        pause()
+        return
+
+    try:
+        _, current_code, _ = tgproxy_secret_parts(values)
+    except Exception as exc:
+        print_block("TGProxy", [str(exc)], accent=RED)
+        pause()
+        return
+
+    new_code = prompt_tgproxy_access_code(current_code)
+    if new_code == current_code:
+        print_block("TGProxy Access Code", ["Access code was not changed."], accent=RED)
+        pause()
+        return
+
+    original_env = INSTANCE_ENV_PATH.read_text(encoding="utf-8")
+    config_path = PROJECT_ROOT / "tgproxy" / "config.toml"
+    original_config = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+
+    try:
+        new_secret = build_tgproxy_secret(new_code, tgproxy_faketls_domain(values))
+        update_env(INSTANCE_ENV_PATH, {"TGPROXY_SECRET": new_secret})
+        update_tgproxy_config_secret(new_secret)
+        restart_result = run(["docker", "restart", container])
+        if restart_result.returncode != 0:
+            raise RuntimeError((restart_result.stdout or "") + (restart_result.stderr or ""))
+    except Exception as exc:
+        INSTANCE_ENV_PATH.write_text(original_env, encoding="utf-8")
+        if config_path.exists():
+            config_path.write_text(original_config, encoding="utf-8")
+        if container:
+            run(["docker", "restart", container])
+        print_block("TGProxy Update Failed", [str(exc)], accent=RED)
+        pause()
+        return
+
+    refreshed = parse_env(INSTANCE_ENV_PATH)
+    lines = [
+        "TGProxy access code updated successfully.",
+        "",
+        f"Access code  : {new_code}",
+        f"TG Proxy URL : {tgproxy_url(refreshed)}",
+        "",
+        f"{YELLOW}Save the new TG Proxy URL now. The old secret is no longer valid.{RESET}",
+    ]
+    print_block("TGProxy Access Code", lines, accent=GREEN)
     pause()
 
 
