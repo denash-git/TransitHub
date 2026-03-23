@@ -424,6 +424,11 @@ def tgproxy_faketls_domain(values: dict[str, str]) -> str:
 
 
 def tgproxy_secret(values: dict[str, str]) -> str:
+    config_path = PROJECT_ROOT / "tgproxy" / "config.toml"
+    if config_path.exists():
+        for line in config_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith('secret = "'):
+                return line.split('"', 2)[1].strip().lower()
     return values.get("TGPROXY_SECRET", "").strip().lower()
 
 
