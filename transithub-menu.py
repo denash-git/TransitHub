@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import bcrypt
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -12,6 +11,20 @@ import shutil
 import sqlite3
 import string
 import subprocess
+
+from transithub_runtime.env import parse_env as shared_parse_env, update_env as shared_update_env
+from transithub_runtime.tgproxy import (
+    build_secret as shared_build_tgproxy_secret,
+    enabled as shared_tgproxy_enabled,
+    faketls_domain as shared_tgproxy_faketls_domain,
+    public_host as shared_tgproxy_public_host,
+    split_secret as shared_split_tgproxy_secret,
+)
+from transithub_runtime.xui_db import (
+    update_xui_db_credentials as shared_update_xui_db_credentials,
+    upsert_xui_setting as shared_upsert_xui_setting,
+    xui_user_record as shared_xui_user_record,
+)
 
 try:
     import qrcode
@@ -111,35 +124,11 @@ def bool_env(value: str | None) -> bool:
 
 
 def parse_env(path: Path) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        result[key.strip()] = value.strip()
-    return result
+    return shared_parse_env(path)
 
 
 def update_env(path: Path, updates: dict[str, str]) -> None:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    remaining = dict(updates)
-    rendered: list[str] = []
-    for raw_line in lines:
-        stripped = raw_line.strip()
-        if stripped and not stripped.startswith("#") and "=" in raw_line:
-            key = raw_line.split("=", 1)[0].strip()
-            if key in remaining:
-                rendered.append(f"{key}={remaining.pop(key)}")
-                continue
-        rendered.append(raw_line)
-
-    if remaining:
-        rendered.append("")
-        for key, value in remaining.items():
-            rendered.append(f"{key}={value}")
-
-    path.write_text("\n".join(rendered).rstrip() + "\n", encoding="utf-8")
+    shared_update_env(path, updates)
 
 
 def random_token(length: int, alphabet: str | None = None) -> str:
@@ -427,15 +416,15 @@ def xui_db_state() -> dict[str, str]:
 
 
 def tgproxy_enabled(values: dict[str, str]) -> bool:
-    return bool_env(values.get("ENABLE_TGPROXY")) and bool(values.get("TGPROXY_PUBLIC_HOST", "").strip())
+    return shared_tgproxy_enabled(values)
 
 
 def tgproxy_public_host(values: dict[str, str]) -> str:
-    return values.get("TGPROXY_PUBLIC_HOST", "").strip() or values.get("DOMAIN", "").strip()
+    return shared_tgproxy_public_host(values)
 
 
 def tgproxy_faketls_domain(values: dict[str, str]) -> str:
-    return values.get("TGPROXY_FAKETLS_DOMAIN", "").strip() or tgproxy_public_host(values)
+    return shared_tgproxy_faketls_domain(values)
 
 
 def tgproxy_secret(values: dict[str, str]) -> str:
@@ -454,23 +443,11 @@ def tgproxy_url(values: dict[str, str]) -> str:
 
 
 def tgproxy_secret_parts(values: dict[str, str]) -> tuple[str, str, str]:
-    secret = tgproxy_secret(values)
-    if not secret.startswith("ee") or len(secret) <= 2 + TGPROXY_CODE_LENGTH:
-        raise ValueError("Current TGProxy secret is invalid.")
-    prefix = "ee"
-    code = secret[2 : 2 + TGPROXY_CODE_LENGTH]
-    domain_hex = secret[2 + TGPROXY_CODE_LENGTH :]
-    return prefix, code, domain_hex
+    return shared_split_tgproxy_secret(tgproxy_secret(values))
 
 
 def build_tgproxy_secret(access_code: str, fake_tls_domain: str) -> str:
-    normalized_code = access_code.strip().lower()
-    if len(normalized_code) != TGPROXY_CODE_LENGTH or any(ch not in "0123456789abcdef" for ch in normalized_code):
-        raise ValueError(f"TGProxy access code must be exactly {TGPROXY_CODE_LENGTH} hexadecimal characters.")
-    normalized_domain = fake_tls_domain.strip().lower()
-    if not normalized_domain:
-        raise ValueError("TGProxy FakeTLS domain is empty.")
-    return f"ee{normalized_code}{normalized_domain.encode('utf-8').hex()}"
+    return shared_build_tgproxy_secret(access_code, fake_tls_domain)
 
 
 def update_tgproxy_config_secret(new_secret: str) -> None:
@@ -493,80 +470,15 @@ def update_tgproxy_config_secret(new_secret: str) -> None:
 
 
 def xui_user_record() -> dict[str, object]:
-    if not XUI_DB_PATH.exists():
-        raise FileNotFoundError(f"x-ui database was not found: {XUI_DB_PATH}")
-
-    conn = sqlite3.connect(XUI_DB_PATH)
-    try:
-        cur = conn.cursor()
-        row = cur.execute("SELECT id, username, password FROM users ORDER BY id LIMIT 1").fetchone()
-        if not row:
-            return {"id": None, "username": "", "password_hash": ""}
-        return {
-            "id": int(row[0]),
-            "username": str(row[1] or ""),
-            "password_hash": str(row[2] or ""),
-        }
-    finally:
-        conn.close()
-
-
-def hash_xui_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return shared_xui_user_record(XUI_DB_PATH)
 
 
 def update_xui_db_credentials(username: str | None = None, password: str | None = None) -> str:
-    if username is None and password is None:
-        raise ValueError("No x-ui credential changes were requested.")
-
-    current = xui_user_record()
-    target_username = username if username is not None else str(current.get("username") or "")
-    target_password_hash = (
-        hash_xui_password(password)
-        if password is not None
-        else str(current.get("password_hash") or "")
-    )
-
-    if not target_username:
-        raise ValueError("x-ui username can not be empty.")
-    if not target_password_hash:
-        raise ValueError("x-ui password hash can not be empty.")
-
-    conn = sqlite3.connect(XUI_DB_PATH)
-    try:
-        cur = conn.cursor()
-        if current.get("id") is None:
-            cur.execute(
-                "INSERT INTO users (username, password) VALUES (?, ?)",
-                (target_username, target_password_hash),
-            )
-        else:
-            cur.execute(
-                "UPDATE users SET username = ?, password = ? WHERE id = ?",
-                (target_username, target_password_hash, int(current["id"])),
-            )
-        conn.commit()
-    finally:
-        conn.close()
-
-    return target_username
+    return shared_update_xui_db_credentials(username=username, password=password, db_path=XUI_DB_PATH)
 
 
 def upsert_xui_setting(key: str, value: str) -> None:
-    if not XUI_DB_PATH.exists():
-        raise FileNotFoundError(f"x-ui database was not found: {XUI_DB_PATH}")
-
-    conn = sqlite3.connect(XUI_DB_PATH)
-    try:
-        cur = conn.cursor()
-        row = cur.execute("SELECT id FROM settings WHERE key = ? LIMIT 1", (key,)).fetchone()
-        if row:
-            cur.execute("UPDATE settings SET value = ? WHERE id = ?", (value, int(row[0])))
-        else:
-            cur.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
-        conn.commit()
-    finally:
-        conn.close()
+    shared_upsert_xui_setting(key, value, db_path=XUI_DB_PATH)
 
 
 def render_main_menu(values: dict[str, str]) -> None:

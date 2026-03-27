@@ -15,13 +15,15 @@ TransitHub v2 разворачивает proxy platform на чистой VPS с
 Одной строкой:
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
 или:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
 Или обычным clone-сценарием:
@@ -29,8 +31,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/denash-git/TransitHub/main/b
 ```bash
 apt-get update
 apt-get install -y git
-git clone https://github.com/denash-git/TransitHub.git /root/TransitHub
-cd /root/TransitHub
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+git clone --branch "$BRANCH" https://github.com/denash-git/TransitHub.git "${TARGET_HOME}/TransitHub"
+cd "${TARGET_HOME}/TransitHub"
 bash install.sh
 ```
 
@@ -69,13 +74,15 @@ bash install.sh
 - для тестового сертификата можно запустить:
 
 ```bash
-CERTBOT_STAGING=true bash <(wget -qO- https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+CERTBOT_STAGING=true bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
 или:
 
 ```bash
-CERTBOT_STAGING=true bash <(curl -fsSL https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh)
+BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+CERTBOT_STAGING=true bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
 - если время на VPS не синхронизировано, установщик покажет предупреждение, но продолжит работу
@@ -97,6 +104,8 @@ menu
 Если launcher ещё не установлен или нужно запустить файл напрямую:
 
 ```bash
-cd /root/TransitHub
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+cd "${TARGET_HOME}/TransitHub"
 python3 transithub-menu.py
 ```

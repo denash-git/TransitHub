@@ -104,11 +104,13 @@ def main() -> int:
             return 0
 
         if args.command == "seed-xui-db":
-            from .runtime import load_instance_env
+            from .runtime import load_instance_env, save_instance_env
             from .xui_db import seed_xui_db
 
             values = load_instance_env()
-            print(json.dumps(seed_xui_db(values), indent=2))
+            result = seed_xui_db(values)
+            save_instance_env(result.get("updated_values", values))
+            print(json.dumps(result, indent=2))
             return 0
 
         parser.print_help()

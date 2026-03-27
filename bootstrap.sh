@@ -2,9 +2,39 @@
 set -euo pipefail
 
 REPO_URL="${TRANSITHUB_REPO_URL:-https://github.com/denash-git/TransitHub.git}"
-INSTALL_DIR="${TRANSITHUB_INSTALL_DIR:-/root/TransitHub}"
 BRANCH="${TRANSITHUB_BRANCH:-main}"
 RAW_BOOTSTRAP_URL="${TRANSITHUB_BOOTSTRAP_URL:-https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh}"
+
+resolve_home_dir() {
+  local target_user="$1"
+  if [[ -z "$target_user" || "$target_user" == "root" ]]; then
+    printf '%s' '/root'
+    return
+  fi
+
+  local passwd_home
+  passwd_home="$(getent passwd "$target_user" | cut -d: -f6)"
+  if [[ -n "$passwd_home" ]]; then
+    printf '%s' "$passwd_home"
+    return
+  fi
+
+  printf '%s' "/home/${target_user}"
+}
+
+resolve_install_dir() {
+  if [[ -n "${TRANSITHUB_INSTALL_DIR:-}" ]]; then
+    printf '%s' "$TRANSITHUB_INSTALL_DIR"
+    return
+  fi
+
+  local target_user="${SUDO_USER:-${USER:-root}}"
+  local home_dir
+  home_dir="$(resolve_home_dir "$target_user")"
+  printf '%s' "${home_dir%/}/TransitHub"
+}
+
+INSTALL_DIR="$(resolve_install_dir)"
 
 rerun_with_sudo() {
   if ! command -v sudo >/dev/null 2>&1; then
