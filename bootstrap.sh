@@ -89,7 +89,39 @@ ensure_git() {
   apt-get install -y git ca-certificates
 }
 
+install_already_finalized() {
+  local state_path="${INSTALL_DIR}/.transithub-install-state.json"
+  [[ -f "$state_path" ]] || return 1
+  grep -q '"status"[[:space:]]*:[[:space:]]*"installed"' "$state_path"
+}
+
+re_prune_installed_tree() {
+  local target
+  for target in \
+    "$INSTALL_DIR/bootstrap.sh" \
+    "$INSTALL_DIR/docs" \
+    "$INSTALL_DIR/install" \
+    "$INSTALL_DIR/install.sh" \
+    "$INSTALL_DIR/README.md" \
+    "$INSTALL_DIR/requirements.txt" \
+    "$INSTALL_DIR/templates" \
+    "$INSTALL_DIR/tests" \
+    "$INSTALL_DIR/instance.env.example" \
+    "$INSTALL_DIR/__pycache__"
+  do
+    [[ -e "$target" ]] || continue
+    rm -rf -- "$target"
+  done
+}
+
 prepare_checkout() {
+  if install_already_finalized; then
+    re_prune_installed_tree
+    printf 'TransitHub installation is already finalized in %s\n' "$INSTALL_DIR"
+    printf 'Use `menu` for any post-install changes.\n'
+    exit 0
+  fi
+
   ensure_install_dir_owner
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     run_as_target_user git -C "$INSTALL_DIR" fetch origin "$BRANCH" --prune
