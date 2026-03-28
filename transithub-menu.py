@@ -140,8 +140,15 @@ def copy_to_clipboard(value: str) -> bool:
 
 def clipboard_notice_lines(label: str, value: str) -> list[str]:
     if copy_to_clipboard(value):
-        return [f"{YELLOW}{label} is now in your clipboard.{RESET}"]
+        return [
+            f"{YELLOW}Clipboard copy was requested for {label}.{RESET}",
+            f"{YELLOW}If your terminal supports OSC52 over SSH, this value should now be in your clipboard.{RESET}",
+        ]
     return [f"{YELLOW}Clipboard copy is not available here. Save this value now.{RESET}"]
+
+
+def danger_menu_option(label: str) -> str:
+    return f"{RED}0. {label}{RESET}"
 
 
 def bool_env(value: str | None) -> bool:
@@ -526,7 +533,7 @@ def render_main_menu(values: dict[str, str]) -> None:
         "4. TGProxy",
         "5. NetBird",
         "6. Services",
-        "0. Exit",
+        danger_menu_option("Exit"),
     ]
     print_block("TransitHub Local Menu", lines, accent=BLUE)
 
@@ -553,7 +560,7 @@ def netbird_menu() -> None:
             "5. Stop",
             "6. Restart",
             "7. Disable NetBird",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block("NetBird", lines, accent=GREEN)
         choice = prompt("Select an option")
@@ -611,7 +618,7 @@ def tgproxy_menu() -> None:
             "4. Start",
             "5. Stop",
             "6. Restart",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block("TGProxy", lines, accent=GREEN)
         choice = prompt("Select an option")
@@ -800,7 +807,7 @@ def xui_menu() -> None:
             "7. Stop",
             "8. Restart",
             "9. Open shell",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block("3x-ui", lines, accent=YELLOW)
         choice = prompt("Select an option")
@@ -1086,7 +1093,7 @@ def simple_service_menu(values: dict[str, str], title: str, service: str, accent
             "2. Start",
             "3. Stop",
             "4. Restart",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block(title, lines, accent=accent)
         choice = prompt("Select an option")
@@ -1110,7 +1117,7 @@ def services_menu() -> None:
             "2. Show service logs",
             "3. TLS certificate",
             "4. Time settings",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block("Services", lines, accent=BLUE)
         choice = prompt("Select an option")
@@ -1167,7 +1174,7 @@ def certificate_menu(values: dict[str, str]) -> None:
             "",
             "1. Run renew now",
             "2. Force reissue certificate",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block("TLS Certificate", lines, accent=BLUE)
         choice = prompt("Select an option")
@@ -1301,7 +1308,7 @@ def time_menu(values: dict[str, str]) -> None:
             "1. Show time status",
             "2. Show timezone examples",
             "3. Change timezone",
-            "0. Back",
+            danger_menu_option("Back"),
         ]
         print_block("Time Settings", lines, accent=BLUE)
         choice = prompt("Select an option")
