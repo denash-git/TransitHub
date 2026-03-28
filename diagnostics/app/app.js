@@ -1,33 +1,30 @@
 const state = {
   config: null,
-  startedAt: null,
-  resultText: '',
+  countdownTimer: null,
+  running: false,
 };
 
 const elements = {
   themeToggle: document.getElementById('theme-toggle'),
-  startTest: document.getElementById('start-test'),
-  retest: document.getElementById('retest'),
-  copyResult: document.getElementById('copy-result'),
-  sessionStatus: document.getElementById('session-status'),
-  connectionStatus: document.getElementById('connection-status'),
-  expiresAt: document.getElementById('expires-at'),
-  latencyValue: document.getElementById('latency-value'),
+  themeIcon: document.getElementById('theme-icon'),
+  expiresSeconds: document.getElementById('expires-seconds'),
+  statusLine: document.getElementById('status-line'),
+  pingValue: document.getElementById('ping-value'),
   downloadValue: document.getElementById('download-value'),
   uploadValue: document.getElementById('upload-value'),
   phaseLabel: document.getElementById('phase-label'),
+  progressText: document.getElementById('progress-text'),
   progressFill: document.getElementById('progress-fill'),
-  sessionUrl: document.getElementById('session-url'),
-  currentUrl: document.getElementById('current-url'),
-  startedAt: document.getElementById('started-at'),
-  clientInfo: document.getElementById('client-info'),
+  startTest: document.getElementById('start-test'),
 };
 
 function setTheme(theme) {
-  document.body.classList.toggle('theme-light', theme === 'light');
-  document.body.classList.toggle('theme-dark', theme !== 'light');
-  localStorage.setItem('transithub-diag-theme', theme);
-  elements.themeToggle.textContent = theme === 'light' ? 'Dark Theme' : 'Light Theme';
+  const isLight = theme === 'light';
+  document.body.classList.toggle('theme-light', isLight);
+  document.body.classList.toggle('theme-dark', !isLight);
+  localStorage.setItem('transithub-diag-theme', isLight ? 'light' : 'dark');
+  elements.themeIcon.textContent = isLight ? '☾' : '☀';
+  elements.themeToggle.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Switch to light theme');
 }
 
 function loadTheme() {
@@ -42,9 +39,21 @@ function formatNumber(value) {
   return value.toFixed(value >= 100 ? 0 : 2);
 }
 
-function setPhase(label, progressPercent) {
+function setPhase(label, percent) {
+  const clamped = Math.max(0, Math.min(100, percent));
   elements.phaseLabel.textContent = label;
-  elements.progressFill.style.width = `${progressPercent}%`;
+  elements.progressText.textContent = `${Math.round(clamped)}%`;
+  elements.progressFill.style.width = `${clamped}%`;
+}
+
+function setStatus(text) {
+  elements.statusLine.textContent = text;
+}
+
+function setMetrics({ ping = '--', download = '--', upload = '--' } = {}) {
+  elements.pingValue.textContent = ping;
+  elements.downloadValue.textContent = download;
+  elements.uploadValue.textContent = upload;
 }
 
 async function fetchJson(url, options = {}) {
@@ -55,23 +64,55 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
+function isExpired() {
+  if (!state.config) {
+    return false;
+  }
+  return Date.now() >= new Date(state.config.expires_at).getTime();
+}
+
+function updateExpiryCountdown() {
+  if (!state.config) {
+    return;
+  }
+  const diffMs = new Date(state.config.expires_at).getTime() - Date.now();
+  const seconds = Math.max(0, Math.ceil(diffMs / 1000));
+  elements.expiresSeconds.textContent = `${seconds}`;
+
+  if (seconds === 0) {
+    if (state.countdownTimer) {
+      clearInterval(state.countdownTimer);
+      state.countdownTimer = null;
+    }
+    elements.startTest.disabled = true;
+    if (!state.running) {
+      setStatus('Session expired. Create a new browser link from TransitHub menu.');
+      setPhase('Session expired', 100);
+    }
+  }
+}
+
+function startExpiryCountdown() {
+  updateExpiryCountdown();
+  if (state.countdownTimer) {
+    clearInterval(state.countdownTimer);
+  }
+  state.countdownTimer = window.setInterval(updateExpiryCountdown, 1000);
+}
+
 async function loadConfig() {
-  const config = await fetchJson('./api/config');
-  state.config = config;
-  elements.expiresAt.textContent = new Date(config.expires_at).toLocaleString();
-  elements.sessionUrl.textContent = config.public_url;
-  elements.currentUrl.textContent = window.location.href;
-  elements.startedAt.textContent = 'Session created in TransitHub menu';
+  state.config = await fetchJson('./api/config');
+  startExpiryCountdown();
 }
 
 async function measureLatency() {
   const attempts = [];
-  for (let i = 0; i < 5; i += 1) {
+  for (let index = 0; index < 5; index += 1) {
     const started = performance.now();
-    await fetchJson(`./api/ping?cacheBust=${Date.now()}-${i}`);
+    await fetchJson(`./api/ping?cacheBust=${Date.now()}-${index}`);
     attempts.push(performance.now() - started);
   }
-  attempts.sort((a, b) => a - b);
+  attempts.sort((left, right) => left - right);
   return attempts[Math.floor(attempts.length / 2)];
 }
 
@@ -97,8 +138,10 @@ async function measureDownload(bytes, streams) {
   const results = await Promise.all(Array.from({ length: streams }, () => downloadOnce(bytes)));
   const durationSeconds = (performance.now() - started) / 1000;
   const totalBytes = results.reduce((sum, current) => sum + current, 0);
-  const mbps = (totalBytes * 8) / 1_000_000 / durationSeconds;
-  return { mbps, totalBytes };
+  return {
+    totalBytes,
+    mbps: (totalBytes * 8) / 1_000_000 / durationSeconds,
+  };
 }
 
 async function uploadOnce(payload) {
@@ -122,8 +165,10 @@ async function measureUpload(bytes, streams) {
   const results = await Promise.all(Array.from({ length: streams }, () => uploadOnce(payload)));
   const durationSeconds = (performance.now() - started) / 1000;
   const totalBytes = results.reduce((sum, current) => sum + (current.received_bytes || 0), 0);
-  const mbps = (totalBytes * 8) / 1_000_000 / durationSeconds;
-  return { mbps, totalBytes };
+  return {
+    totalBytes,
+    mbps: (totalBytes * 8) / 1_000_000 / durationSeconds,
+  };
 }
 
 async function publishResult(result) {
@@ -136,41 +181,33 @@ async function publishResult(result) {
   });
 }
 
-function renderResult(result) {
-  elements.latencyValue.textContent = formatNumber(result.latency_ms);
-  elements.downloadValue.textContent = formatNumber(result.download_mbps);
-  elements.uploadValue.textContent = formatNumber(result.upload_mbps);
-  elements.sessionStatus.textContent = 'Completed';
-  elements.connectionStatus.textContent = 'Browser HTTPS test finished';
-  elements.clientInfo.textContent = navigator.userAgent;
-
-  state.resultText = [
-    `Latency: ${formatNumber(result.latency_ms)} ms`,
-    `Download: ${formatNumber(result.download_mbps)} Mbps`,
-    `Upload: ${formatNumber(result.upload_mbps)} Mbps`,
-    `Started at: ${state.startedAt}`,
-    `URL: ${state.config.public_url}`,
-  ].join('\n');
-}
-
 async function runTest() {
+  if (state.running || isExpired()) {
+    if (isExpired()) {
+      setStatus('Session expired. Create a new browser link from TransitHub menu.');
+      setPhase('Session expired', 100);
+    }
+    return;
+  }
+
+  state.running = true;
   elements.startTest.disabled = true;
-  elements.retest.disabled = true;
-  elements.copyResult.disabled = true;
-  elements.sessionStatus.textContent = 'Running';
-  elements.connectionStatus.textContent = 'Browser HTTPS test in progress';
-  state.startedAt = new Date().toLocaleString();
-  elements.startedAt.textContent = state.startedAt;
+  setMetrics();
 
   try {
-    setPhase('Measuring latency', 18);
-    const latency = await measureLatency();
+    setStatus('Measuring browser HTTPS path to the VPS.');
 
-    setPhase('Measuring download', 48);
+    setPhase('Measuring ping', 16);
+    const latency = await measureLatency();
+    elements.pingValue.textContent = formatNumber(latency);
+
+    setPhase('Measuring download', 46);
     const download = await measureDownload(state.config.download_bytes, state.config.download_streams);
+    elements.downloadValue.textContent = formatNumber(download.mbps);
 
     setPhase('Measuring upload', 78);
     const upload = await measureUpload(state.config.upload_bytes, state.config.upload_streams);
+    elements.uploadValue.textContent = formatNumber(upload.mbps);
 
     const result = {
       latency_ms: Number(latency.toFixed(2)),
@@ -182,28 +219,15 @@ async function runTest() {
 
     setPhase('Publishing result', 92);
     await publishResult(result);
-    renderResult(result);
+
+    setStatus('Current browser session completed successfully.');
     setPhase('Completed', 100);
-    elements.retest.disabled = false;
-    elements.copyResult.disabled = false;
   } catch (error) {
-    elements.sessionStatus.textContent = 'Failed';
-    elements.connectionStatus.textContent = error.message;
+    setStatus(error.message);
     setPhase('Test failed', 100);
   } finally {
-    elements.startTest.disabled = false;
-  }
-}
-
-async function copyResult() {
-  if (!state.resultText) {
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(state.resultText);
-    elements.connectionStatus.textContent = 'Result copied to clipboard';
-  } catch {
-    elements.connectionStatus.textContent = 'Clipboard copy is not available in this browser';
+    state.running = false;
+    elements.startTest.disabled = isExpired();
   }
 }
 
@@ -213,19 +237,19 @@ function bindEvents() {
     setTheme(nextTheme);
   });
   elements.startTest.addEventListener('click', runTest);
-  elements.retest.addEventListener('click', runTest);
-  elements.copyResult.addEventListener('click', copyResult);
 }
 
 async function main() {
   loadTheme();
   bindEvents();
+  setMetrics();
+  setPhase('Waiting for start', 0);
+  setStatus('Ready to start HTTPS browser test.');
   await loadConfig();
-  elements.clientInfo.textContent = navigator.userAgent;
-  setPhase('Ready to start', 0);
 }
 
 main().catch((error) => {
-  elements.sessionStatus.textContent = 'Failed';
-  elements.connectionStatus.textContent = error.message;
+  setStatus(error.message);
+  setPhase('Initialization failed', 100);
+  elements.startTest.disabled = true;
 });

@@ -7,136 +7,81 @@
   <link rel="stylesheet" href="./assets/style.css">
 </head>
 <body class="theme-dark">
-  <main class="page">
-    <section class="hero">
-      <div class="topbar">
-        <div>
-          <p class="eyebrow">TransitHub Diagnostics</p>
-          <h1>Local PC Speed Test</h1>
-          <p class="lede">This temporary HTTPS session was created from TransitHub menu. The test runs here in your browser over the existing 443 ingress. The issued link is valid for 5 minutes and no result history is saved.</p>
-        </div>
-        <div class="pill-group">
-          <button id="theme-toggle" class="theme-button" type="button" aria-label="Toggle theme">Light Theme</button>
-        </div>
-      </div>
+  <main class="screen">
+    <div class="waves-header" aria-hidden="true">
+      <div class="waves-inner-header"></div>
+      <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+        viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+        <defs>
+          <path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s58 18 88 18 58-18 88-18 58 18 88 18v44h-352z" />
+        </defs>
+        <g class="parallax">
+          <use xlink:href="#gentle-wave" x="48" y="0" />
+          <use xlink:href="#gentle-wave" x="48" y="3" />
+          <use xlink:href="#gentle-wave" x="48" y="5" />
+          <use xlink:href="#gentle-wave" x="48" y="7" />
+        </g>
+      </svg>
+    </div>
 
-      <div class="hero-grid">
-        <article class="glass-card">
-          <h2>How This Works</h2>
-          <ol class="steps">
-            <li>
-              <span class="step-index">01</span>
-              <div class="step-copy">
-                <strong>Session created in menu</strong>
-                <span>TransitHub menu issued this temporary test URL. Creating a new one there replaces the current session. The link stays valid for 5 minutes.</span>
+    <section class="panel-wrap">
+      <article class="speed-panel">
+        <header class="panel-topbar">
+          <div class="brand-mark">TransitHub</div>
+          <div class="expires-box">
+            <span class="expires-label">Expires URL</span>
+            <span class="expires-value"><span id="expires-seconds">--</span> s</span>
+          </div>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+            <span id="theme-icon" class="theme-icon" aria-hidden="true">☀</span>
+          </button>
+        </header>
+
+        <div class="panel-body">
+          <p class="panel-kicker">Diagnostics</p>
+          <h1>PC <span>&lt;--&gt;</span> VPS speed test</h1>
+          <p id="status-line" class="status-line">Ready to start HTTPS browser test.</p>
+
+          <section class="metrics-grid" aria-label="Current measurements">
+            <article class="metric-pill">
+              <span class="metric-name">Ping</span>
+              <div class="metric-reading">
+                <span id="ping-value" class="metric-value">--</span>
+                <span class="metric-unit">ms</span>
               </div>
-            </li>
-            <li>
-              <span class="step-index">02</span>
-              <div class="step-copy">
-                <strong>Run the test here</strong>
-                <span>Press <em>Start Test</em> below. This browser measures latency, download, and upload to the VPS over HTTPS.</span>
+            </article>
+
+            <article class="metric-pill">
+              <span class="metric-name">Download</span>
+              <div class="metric-reading">
+                <span id="download-value" class="metric-value">--</span>
+                <span class="metric-unit">Mbps</span>
               </div>
-            </li>
-            <li>
-              <span class="step-index">03</span>
-              <div class="step-copy">
-                <strong>The browser runs the test</strong>
-                <span>The test itself does not start from the backend. TransitHub menu only creates the link for the current browser session.</span>
+            </article>
+
+            <article class="metric-pill">
+              <span class="metric-name">Upload</span>
+              <div class="metric-reading">
+                <span id="upload-value" class="metric-value">--</span>
+                <span class="metric-unit">Mbps</span>
               </div>
-            </li>
-          </ol>
-        </article>
+            </article>
+          </section>
 
-        <article class="glass-card">
-          <h3>Current Session</h3>
-          <p class="label">Temporary URL</p>
-          <p id="session-url" class="detail-value mono">-</p>
-          <p class="helper">This session expires automatically after 5 minutes. No result history is stored after the current interaction.</p>
-        </article>
-      </div>
-    </section>
+          <section class="progress-block" aria-label="Run progress">
+            <div class="progress-meta">
+              <span id="phase-label" class="phase-label">Waiting for start</span>
+              <span id="progress-text" class="progress-text">0%</span>
+            </div>
+            <div class="progress-track">
+              <span id="progress-fill" class="progress-fill"></span>
+            </div>
+          </section>
 
-    <section class="status-strip">
-      <article class="status-card">
-        <p class="label">Session</p>
-        <p id="session-status" class="value accent">Ready</p>
-      </article>
-      <article class="status-card">
-        <p class="label">Connection</p>
-        <p id="connection-status" class="value">Waiting to start</p>
-      </article>
-      <article class="status-card">
-        <p class="label">Created At</p>
-        <p id="started-at" class="value">-</p>
-      </article>
-      <article class="status-card">
-        <p class="label">Expires</p>
-        <p id="expires-at" class="value">-</p>
-      </article>
-    </section>
-
-    <section class="metrics-grid">
-      <article class="metric-card latency-card">
-        <div>
-          <p class="metric-label">Latency</p>
-          <p id="latency-value" class="metric-value">--</p>
+          <div class="action-row">
+            <button id="start-test" class="start-button" type="button">Start</button>
+          </div>
         </div>
-        <p class="metric-unit">Median RTT in milliseconds</p>
-      </article>
-      <article class="metric-card download-card">
-        <div>
-          <p class="metric-label">Download</p>
-          <p id="download-value" class="metric-value">--</p>
-        </div>
-        <p class="metric-unit">Throughput from VPS to this browser in Mbps</p>
-      </article>
-      <article class="metric-card upload-card">
-        <div>
-          <p class="metric-label">Upload</p>
-          <p id="upload-value" class="metric-value">--</p>
-        </div>
-        <p class="metric-unit">Throughput from this browser to VPS in Mbps</p>
-      </article>
-    </section>
-
-    <section class="timeline">
-      <div class="timeline-header">
-        <div>
-          <p class="eyebrow">Run Status</p>
-          <p id="phase-label" class="phase-label">Ready to start</p>
-        </div>
-        <p id="client-info" class="value">Browser HTTPS session</p>
-      </div>
-      <div class="progress-track">
-        <span id="progress-fill"></span>
-      </div>
-      <div class="phase-steps">
-        <span>Latency</span>
-        <span>Download</span>
-        <span>Upload</span>
-        <span>Done</span>
-      </div>
-
-      <div class="action-bar">
-        <button id="start-test" class="primary-button" type="button">Start Test</button>
-        <button id="retest" class="secondary-button" type="button" disabled>Retest</button>
-        <button id="copy-result" class="ghost-button" type="button" disabled>Copy Result</button>
-      </div>
-    </section>
-
-    <section class="detail-grid">
-      <article class="detail-card">
-        <p class="detail-label">Current URL</p>
-        <p id="current-url" class="detail-value mono">-</p>
-      </article>
-      <article class="detail-card">
-        <p class="detail-label">Test Role</p>
-        <p class="detail-value">Local browser over HTTPS</p>
-      </article>
-      <article class="detail-card">
-        <p class="detail-label">Result Handling</p>
-        <p class="detail-value">Current session only. No saved history.</p>
       </article>
     </section>
   </main>
