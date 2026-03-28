@@ -15,8 +15,10 @@
   --light-color-surface-300: rgba(17, 25, 41, 0.08);
   --light-color-text-primary: rgba(17, 25, 41, 0.82);
   --light-color-text-secondary: rgba(17, 25, 41, 0.52);
-  --success-color: #3ad3ba;
-  --button-color: #4fb99f;
+  --success-color: #2fc4a1;
+  --button-color: #2ea88f;
+  --button-color-top: #35b79b;
+  --button-color-bottom: #238672;
   --panel-width: min(900px, calc(100vw - 56px));
   --panel-radius: 32px;
   --transition-fast: 180ms ease;
@@ -48,6 +50,13 @@ body.theme-light {
   color-scheme: light;
   background: var(--light-color-login-background);
   color: var(--light-color-text-primary);
+}
+
+body.theme-light {
+  --success-color: #16977d;
+  --button-color: #138a72;
+  --button-color-top: #16977d;
+  --button-color-bottom: #0f7a64;
 }
 
 button {
@@ -371,17 +380,17 @@ body.theme-light .progress-track {
   width: min(320px, 100%);
   height: 54px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(0, 135, 113, 0.95), rgba(0, 102, 85, 0.95));
+  background: linear-gradient(180deg, var(--button-color-top), var(--button-color-bottom));
   color: rgba(255, 255, 255, 0.92);
   font-size: 18px;
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px rgba(106, 255, 220, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(106, 255, 220, 0.28);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 
 .start-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: inset 0 0 0 1px rgba(106, 255, 220, 0.42), 0 10px 30px rgba(0, 102, 85, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(106, 255, 220, 0.42), 0 10px 30px rgba(19, 138, 114, 0.28);
 }
 
 .start-button:disabled {
