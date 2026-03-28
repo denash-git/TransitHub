@@ -16,7 +16,7 @@
   --light-color-text-primary: rgba(17, 25, 41, 0.82);
   --light-color-text-secondary: rgba(17, 25, 41, 0.52);
   --success-color: #3ad3ba;
-  --panel-width: min(760px, calc(100vw - 40px));
+  --panel-width: min(900px, calc(100vw - 56px));
   --panel-radius: 32px;
   --transition-fast: 180ms ease;
   --transition-base: 260ms ease;
@@ -88,16 +88,16 @@ body.theme-light .waves-header {
 
 .waves-inner-header {
   width: 100%;
-  height: calc(100vh - 420px);
+  height: calc(100vh - 200px);
 }
 
 .waves {
   position: absolute;
   left: 0;
-  bottom: 120px;
+  bottom: 0;
   width: 100%;
-  min-height: 130px;
-  max-height: 170px;
+  min-height: 240px;
+  max-height: 320px;
 }
 
 .parallax > use:nth-child(1) {
@@ -144,8 +144,8 @@ body.theme-dark .parallax > use:nth-child(4) {
 
 .speed-panel {
   width: var(--panel-width);
-  min-height: 470px;
-  padding: 36px 42px 30px;
+  min-height: 540px;
+  padding: 42px 48px 38px;
   border-radius: var(--panel-radius);
   background: var(--dark-color-surface-100);
   box-shadow: var(--shadow-dark);
@@ -245,7 +245,7 @@ body.theme-light .theme-toggle {
   text-align: center;
   justify-content: center;
   min-height: 100%;
-  gap: 28px;
+  gap: 36px;
 }
 
 .panel-kicker {
@@ -273,21 +273,21 @@ body.theme-light .status-line {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  gap: 18px;
-  margin-top: 8px;
+  gap: 24px;
+  margin-top: 14px;
 }
 
 .metric-column {
   flex: 1 1 0;
-  min-height: 144px;
-  padding: 22px 18px 18px;
+  min-height: 172px;
+  padding: 20px 22px 22px;
   border-radius: 26px;
   background: var(--dark-color-surface-200);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
 }
 
 body.theme-light .metric-column {
@@ -300,6 +300,7 @@ body.theme-light .metric-column {
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--dark-color-text-secondary);
+  align-self: flex-start;
 }
 
 body.theme-light .metric-name {
@@ -309,28 +310,20 @@ body.theme-light .metric-name {
 .metric-reading {
   display: inline-flex;
   align-items: baseline;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
-  min-height: 58px;
+  min-height: 74px;
 }
 
 .metric-value {
-  font-size: clamp(42px, 5vw, 58px);
+  font-size: clamp(48px, 5vw, 66px);
   line-height: .95;
   font-weight: 800;
-}
-
-#ping-value {
-  color: var(--color-primary-100);
-}
-
-#download-value,
-#upload-value {
   color: var(--success-color);
 }
 
 .metric-unit {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--dark-color-text-secondary);
 }
 
@@ -343,7 +336,7 @@ body.theme-light .metric-unit {
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .progress-track {
@@ -439,5 +432,9 @@ body.theme-light .progress-track {
 
   .metrics-strip {
     flex-direction: column;
+  }
+
+  .metric-column {
+    min-height: 136px;
   }
 }
