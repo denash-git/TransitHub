@@ -22,6 +22,15 @@ from .netbird import enabled as netbird_enabled
 from .tgproxy import enabled as tgproxy_enabled
 from .tgproxy import tg_link as tgproxy_tg_link
 from . import paths
+from transithub_runtime.install_state import begin_install
+from transithub_runtime.install_state import mark_failed
+from transithub_runtime.install_state import mark_installed
+from transithub_runtime.install_state import mark_step
+from transithub_runtime.install_state import read_state
+from transithub_runtime.install_state import STATUS_FAILED
+from transithub_runtime.install_state import STATUS_FRESH
+from transithub_runtime.install_state import STATUS_IN_PROGRESS
+from transithub_runtime.install_state import STATUS_INSTALLED
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = PROJECT_ROOT / ".venv"
@@ -51,11 +60,12 @@ PRUNE_RUNTIME_DIRS = [
     PROJECT_ROOT / "xui" / "logs",
 ]
 FRESH_TOTAL_STEPS = 10
-RECONCILE_TOTAL_STEPS = 8
+RESUME_TOTAL_STEPS = 10
 BLUE = "\033[1;34m"
 GREEN = "\033[1;32m"
 RED = "\033[1;31m"
 RESET = "\033[0m"
+CURRENT_STEP_TITLE = "Install startup"
 
 
 class InstallerError(RuntimeError):
@@ -66,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="TransitHub v2 installer")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--non-interactive", action="store_true")
-    parser.add_argument("--mode", choices=["auto", "fresh", "reconcile"], default="auto")
+    parser.add_argument("--mode", choices=["auto", "fresh", "resume"], default="auto")
     return parser
 
 
@@ -90,14 +100,24 @@ def main() -> int:
 def run_install() -> int:
     args = build_parser().parse_args()
     overrides = parse_key_value(args.set)
-    mode = determine_install_mode(args.mode)
+    state = read_state()
+    mode = determine_install_mode(args.mode, state)
 
     banner("TransitHub v2 Installer", "Clean host deploy with local service directories")
     note(f"Selected mode: {mode}")
+    begin_install(mode)
 
-    if mode == "fresh":
-        return run_fresh_install(args.non_interactive, overrides)
-    return run_reconcile_install(overrides)
+    try:
+        if mode == "fresh":
+            result = run_fresh_install(args.non_interactive, overrides)
+        else:
+            result = run_resume_install(args.non_interactive, overrides)
+    except Exception as exc:
+        mark_failed(CURRENT_STEP_TITLE, str(exc))
+        raise
+
+    mark_installed()
+    return result
 
 
 def run_fresh_install(non_interactive: bool, overrides: dict[str, str]) -> int:
@@ -145,6 +165,62 @@ def run_fresh_install(non_interactive: bool, overrides: dict[str, str]) -> int:
     values = load_instance_env(str(python))
 
     step(10, FRESH_TOTAL_STEPS, "Start full stack and finalize deployment")
+    values = finalize_install(python, values)
+    print_summary(values)
+    return 0
+
+
+def run_resume_install(non_interactive: bool, overrides: dict[str, str]) -> int:
+    step(1, RESUME_TOTAL_STEPS, "Run resume preflight checks")
+    resume_preflight(overrides)
+
+    step(2, RESUME_TOTAL_STEPS, "Prepare Python virtual environment")
+    ensure_venv()
+    python = venv_python()
+
+    step(3, RESUME_TOTAL_STEPS, "Install Python packages")
+    note("Upgrade pip in project virtual environment")
+    run([str(python), "-m", "pip", "install", "--upgrade", "pip"])
+    note("Install installer Python dependencies")
+    run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
+
+    step(4, RESUME_TOTAL_STEPS, "Create project layout")
+    run([str(python), "-m", "install.project", "ensure-layout"])
+
+    step(5, RESUME_TOTAL_STEPS, "Resume instance settings")
+    values = resume_instance(python, non_interactive, overrides)
+
+    step(6, RESUME_TOTAL_STEPS, "Prepare host dependencies and firewall")
+    run([str(python), "-m", "install.project", "prepare-host"], stream_output=True)
+    if netbird_enabled(values):
+        note("Configure host routing and firewall prerequisites for NetBird")
+        ensure_netbird_host_ready()
+    enabled_services = runtime_services(values)
+
+    step(7, RESUME_TOTAL_STEPS, "Issue or reuse TLS certificate")
+    values, enabled_services = ensure_install_certificate(python, values)
+
+    step(8, RESUME_TOTAL_STEPS, "Apply runtime services")
+    cleanup_previous_stack()
+    ensure_runtime_networks(values)
+    run(
+        compose_up_command(values, *enabled_services),
+        heartbeat_message="Still working: Docker is preparing runtime services",
+    )
+    wait_for_runtime_services(values, include_nginx=False)
+    wait_for_xui_db()
+
+    step(9, RESUME_TOTAL_STEPS, "Sync managed x-ui settings")
+    run([str(python), "-m", "install.project", "seed-xui-db"])
+    values = load_instance_env(str(python))
+
+    step(10, RESUME_TOTAL_STEPS, "Start full stack and finalize deployment")
+    values = finalize_install(python, values)
+    print_summary(values)
+    return 0
+
+
+def finalize_install(python: Path, values: dict[str, str]) -> dict[str, str]:
     note("Start all runtime services")
     run(
         compose_up_command(values, "--force-recreate", "--remove-orphans"),
@@ -159,62 +235,7 @@ def run_fresh_install(non_interactive: bool, overrides: dict[str, str]) -> int:
     ensure_runtime_menu_venv()
     note("Install local runtime launcher `menu`")
     ensure_menu_launcher()
-    print_summary(values)
-    return 0
-
-
-def run_reconcile_install(overrides: dict[str, str]) -> int:
-    step(1, RECONCILE_TOTAL_STEPS, "Run reconcile preflight checks")
-    reconcile_preflight(overrides)
-
-    step(2, RECONCILE_TOTAL_STEPS, "Prepare Python virtual environment")
-    ensure_venv()
-    python = venv_python()
-
-    step(3, RECONCILE_TOTAL_STEPS, "Install Python packages")
-    note("Upgrade pip in project virtual environment")
-    run([str(python), "-m", "pip", "install", "--upgrade", "pip"])
-    note("Install installer Python dependencies")
-    run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS_PATH)])
-
-    step(4, RECONCILE_TOTAL_STEPS, "Create project layout")
-    run([str(python), "-m", "install.project", "ensure-layout"])
-
-    step(5, RECONCILE_TOTAL_STEPS, "Re-render instance settings")
-    reconfigure_command = [str(python), "-m", "install.project", "reconfigure"]
-    for key, value in overrides.items():
-        reconfigure_command.extend(["--set", f"{key}={value}"])
-    run(reconfigure_command)
-    values = load_instance_env(str(python))
-    if netbird_enabled(values):
-        note("Configure host routing and firewall prerequisites for NetBird")
-        ensure_netbird_host_ready()
-    enabled_services = runtime_services(values)
-
-    step(6, RECONCILE_TOTAL_STEPS, "Issue or reuse TLS certificate")
-    values, enabled_services = ensure_install_certificate(python, values)
-
-    step(7, RECONCILE_TOTAL_STEPS, "Apply runtime changes")
-    ensure_runtime_networks(values)
-    run(
-        compose_up_command(values, "--force-recreate", "--remove-orphans"),
-        heartbeat_message="Still working: Docker is applying the reconcile update",
-    )
-    wait_for_runtime_services(values, include_nginx=True)
-    wait_for_xui_db()
-
-    step(8, RECONCILE_TOTAL_STEPS, "Sync managed x-ui settings")
-    run([str(python), "-m", "install.project", "seed-xui-db"])
-    note("Restart xui so updated managed settings are loaded from the database")
-    run(compose_command(values, "restart", "xui"))
-    wait_for_service_ready("xui")
-    note("Install TransitHub runtime Python environment")
-    ensure_runtime_menu_venv()
-    note("Install local runtime launcher `menu`")
-    ensure_menu_launcher()
-    values = load_instance_env(str(python))
-    print_summary(values)
-    return 0
+    return values
 
 
 def preflight(overrides: dict[str, str]) -> None:
@@ -236,7 +257,7 @@ def preflight(overrides: dict[str, str]) -> None:
         resolve_domain_or_raise(tgproxy_public_host, "Telegram proxy domain")
 
 
-def reconcile_preflight(overrides: dict[str, str]) -> None:
+def resume_preflight(overrides: dict[str, str]) -> None:
     if os.name == "nt":
         return
     require_root()
@@ -252,14 +273,31 @@ def reconcile_preflight(overrides: dict[str, str]) -> None:
         resolve_domain_or_raise(tgproxy_public_host, "Telegram proxy domain")
 
 
-def determine_install_mode(requested_mode: str) -> str:
-    if requested_mode != "auto":
-        return requested_mode
-    current = parse_instance_env(paths.INSTANCE_ENV_PATH)
-    if current.get("INSTANCE_INITIALIZED", "").strip().lower() == "true":
-        return "reconcile"
-    if XUI_DB_PATH.exists():
-        return "reconcile"
+def determine_install_mode(requested_mode: str, state: dict[str, str]) -> str:
+    status = state.get("status", STATUS_FRESH)
+    if status == STATUS_INSTALLED:
+        raise InstallerError(
+            "Installation already completed successfully in this project tree. "
+            "Use `menu` for any post-install changes."
+        )
+
+    if requested_mode == "fresh":
+        if status in {STATUS_IN_PROGRESS, STATUS_FAILED}:
+            raise InstallerError(
+                "An unfinished installation already exists in this project tree. "
+                "Use `--mode resume` to continue it."
+            )
+        return "fresh"
+
+    if requested_mode == "resume":
+        if status not in {STATUS_IN_PROGRESS, STATUS_FAILED}:
+            raise InstallerError(
+                "Resume mode is only available after this same installer started and did not finish successfully."
+            )
+        return "resume"
+
+    if status in {STATUS_IN_PROGRESS, STATUS_FAILED}:
+        return "resume"
     return "fresh"
 
 
@@ -276,6 +314,18 @@ def initialize_instance(python: Path, non_interactive: bool, overrides: dict[str
         note("Configure host routing and firewall prerequisites for NetBird")
         ensure_netbird_host_ready()
     return values
+
+
+def resume_instance(python: Path, non_interactive: bool, overrides: dict[str, str]) -> dict[str, str]:
+    current = parse_instance_env(paths.INSTANCE_ENV_PATH)
+    if current.get("INSTANCE_INITIALIZED", "").strip().lower() != "true":
+        return initialize_instance(python, non_interactive, overrides)
+
+    reconfigure_command = [str(python), "-m", "install.project", "reconfigure"]
+    for key, value in overrides.items():
+        reconfigure_command.extend(["--set", f"{key}={value}"])
+    run(reconfigure_command)
+    return load_instance_env(str(python))
 
 
 def ensure_install_certificate(python: Path, values: dict[str, str]) -> tuple[dict[str, str], list[str]]:
@@ -822,6 +872,9 @@ def banner(title: str, subtitle: str) -> None:
 
 
 def step(number: int, total: int, title: str) -> None:
+    global CURRENT_STEP_TITLE
+    CURRENT_STEP_TITLE = title
+    mark_step(title)
     print()
     print(f"{GREEN}[{number:02d}/{total:02d}] {title}{RESET}")
 

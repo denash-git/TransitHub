@@ -26,6 +26,10 @@ repeat_char() {
   printf '%s' "$result"
 }
 
+has_tty() {
+  [[ -t 0 && -t 1 && -e /dev/tty ]]
+}
+
 spacer() {
   local lines="${1:-1}"
   local i
@@ -73,6 +77,23 @@ prompt_default() {
   printf '%s' "$value"
 }
 
+append_set_arg() {
+  local key="$1"
+  local value="$2"
+  local -n target_ref="$3"
+  target_ref+=(--set "${key}=${value}")
+}
+
+append_optional_env_arg() {
+  local env_name="$1"
+  local key="$2"
+  local -n target_ref="$3"
+  local value="${!env_name:-}"
+  if [[ -n "$value" ]]; then
+    target_ref+=(--set "${key}=${value}")
+  fi
+}
+
 pick_random_fake_site() {
   local root="templates/fakesite"
   mapfile -t FAKE_SITE_CHOICES < <(find "$root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
@@ -87,7 +108,7 @@ detect_tz() {
   timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || printf 'Europe/Moscow'
 }
 
-main() {
+run_interactive_install() {
   local tz domain reality_domain tgproxy_public_host fake_site instance_name tgproxy_state
   local netbird_setup_key netbird_management_url netbird_state
   local -a install_args
@@ -168,6 +189,78 @@ main() {
   fi
 
   "${install_args[@]}"
+}
+
+run_noninteractive_install() {
+  local domain reality_domain tgproxy_public_host fake_site instance_name tz install_mode
+  local netbird_setup_key netbird_management_url
+  local -a install_args
+
+  domain="${TRANSITHUB_DOMAIN:-}"
+  if [[ -z "$domain" ]]; then
+    printf 'No TTY is available. Set TRANSITHUB_DOMAIN and related TRANSITHUB_* variables, or pass explicit install.cli arguments.\n' >&2
+    exit 1
+  fi
+
+  instance_name="${TRANSITHUB_INSTANCE_NAME:-$(hostname -s)}"
+  reality_domain="${TRANSITHUB_REALITY_DOMAIN:-real.${domain}}"
+  tgproxy_public_host="${TRANSITHUB_TGPROXY_PUBLIC_HOST:-tg.${domain}}"
+  netbird_setup_key="${TRANSITHUB_NETBIRD_SETUP_KEY:-}"
+  netbird_management_url="${TRANSITHUB_NETBIRD_MANAGEMENT_URL:-}"
+  tz="${TRANSITHUB_TZ:-$(detect_tz)}"
+  fake_site="${TRANSITHUB_FAKE_SITE_TEMPLATE:-$(pick_random_fake_site)}"
+  install_mode="${TRANSITHUB_INSTALL_MODE:-auto}"
+  if [[ "$tgproxy_public_host" == "-" ]]; then
+    tgproxy_public_host=""
+  fi
+  if [[ "$netbird_setup_key" == "-" ]]; then
+    netbird_setup_key=""
+    netbird_management_url=""
+  fi
+
+  install_args=(
+    python3 -m install.cli
+    --non-interactive
+    --mode "${install_mode}"
+  )
+  append_set_arg "INSTANCE_NAME" "${instance_name}" install_args
+  append_set_arg "DOMAIN" "${domain}" install_args
+  append_set_arg "REALITY_DOMAIN" "${reality_domain}" install_args
+  append_set_arg "TGPROXY_PUBLIC_HOST" "${tgproxy_public_host}" install_args
+  append_set_arg "NETBIRD_SETUP_KEY" "${netbird_setup_key}" install_args
+  append_set_arg "NETBIRD_MANAGEMENT_URL" "${netbird_management_url}" install_args
+  append_set_arg "TZ" "${tz}" install_args
+  append_set_arg "FAKE_SITE_TEMPLATE" "${fake_site}" install_args
+  append_optional_env_arg "TRANSITHUB_CERTBOT_STAGING" "CERTBOT_STAGING" install_args
+  append_optional_env_arg "TRANSITHUB_CERTBOT_EMAIL" "CERTBOT_EMAIL" install_args
+
+  printf 'No TTY detected. Running non-interactive install.\n'
+  printf '  domain    : %s\n' "$domain"
+  printf '  reality   : %s\n' "$reality_domain"
+  printf '  tgproxy   : %s\n' "$tgproxy_public_host"
+  if [[ -n "$netbird_setup_key" && -n "$netbird_management_url" ]]; then
+    printf '  netbird   : %s\n' "$netbird_management_url"
+  else
+    printf '  netbird   : disabled\n'
+  fi
+  printf '  timezone  : %s\n' "$tz"
+  printf '  fake site : %s\n' "$fake_site"
+  printf '\n'
+
+  "${install_args[@]}"
+}
+
+main() {
+  if [[ "$#" -gt 0 ]]; then
+    exec python3 -m install.cli "$@"
+  fi
+
+  if has_tty; then
+    run_interactive_install
+    return
+  fi
+
+  run_noninteractive_install
 }
 
 main "$@"

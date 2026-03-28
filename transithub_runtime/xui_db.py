@@ -671,11 +671,7 @@ def now_ms() -> int:
 
 
 def default_xui_db_path() -> Path:
-    primary = paths.SERVICE_XUI_DATA_DIR / "x-ui.db"
-    if primary.exists():
-        return primary
-    legacy = paths.LEGACY_RUNTIME_XUI_DATA_DIR / "x-ui.db"
-    return legacy if legacy.exists() else primary
+    return paths.SERVICE_XUI_DATA_DIR / "x-ui.db"
 
 
 def secrets_token() -> str:

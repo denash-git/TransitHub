@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-import shutil
-
 from .certbot import certificate_status
 from .netbird import enabled as netbird_enabled
 from .netbird import validate as validate_netbird
@@ -27,66 +24,11 @@ from .render import render_runtime_files
 def ensure_layout() -> None:
     for path in paths.REQUIRED_DIRS:
         path.mkdir(parents=True, exist_ok=True)
-    migrate_legacy_layout()
-
-
-def migrate_legacy_layout() -> None:
-    copy_if_missing(paths.LEGACY_INSTANCE_ENV_PATH, paths.INSTANCE_ENV_PATH)
-    copy_if_missing(paths.LEGACY_DEPLOY_INSTANCE_ENV_PATH, paths.INSTANCE_ENV_PATH)
-    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_PROXY_RENDERED_DIR, paths.SERVICE_PROXY_CONFIG_DIR)
-    copy_tree_contents_if_missing(
-        paths.LEGACY_RUNTIME_PROXY_EXTENSIONS_DIR,
-        paths.SERVICE_PROXY_EXTENSIONS_DIR,
-    )
-    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_SUBPAGE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_FAKESITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_RUNTIME_XUI_DATA_DIR, paths.SERVICE_XUI_DATA_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_PROXY_CONFIG_DIR, paths.SERVICE_PROXY_CONFIG_DIR)
-    copy_tree_contents_if_missing(
-        paths.LEGACY_DEPLOY_PROXY_EXTENSIONS_DIR,
-        paths.SERVICE_PROXY_EXTENSIONS_DIR,
-    )
-    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_SUBPAGE_SITE_DIR, paths.SERVICE_CLIENT_PAGE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_FAKESITE_SITE_DIR, paths.SERVICE_FAKE_SITE_DIR)
-    copy_tree_contents_if_missing(paths.LEGACY_DEPLOY_XUI_DATA_DIR, paths.SERVICE_XUI_DATA_DIR)
-    copy_tree_contents_if_missing(
-        paths.LEGACY_DEPLOY_SUBCONVERTER_DATA_DIR,
-        paths.SERVICE_SUBCONVERTER_DATA_DIR,
-    )
-
-
-def copy_if_missing(source: Path, destination: Path) -> None:
-    if source.exists() and not destination.exists():
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-
-
-def copy_tree_contents_if_missing(source_dir: Path, destination_dir: Path) -> None:
-    if not source_dir.exists():
-        return
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    for source in source_dir.rglob("*"):
-        if source.is_dir():
-            continue
-        relative = source.relative_to(source_dir)
-        destination = destination_dir / relative
-        if destination.exists():
-            continue
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
 
 
 def load_instance_env() -> dict[str, str]:
     values = interactive_defaults()
     current = parse_env(paths.INSTANCE_ENV_PATH)
-    legacy_candidates = [
-        parse_env(paths.LEGACY_DEPLOY_INSTANCE_ENV_PATH),
-        parse_env(paths.LEGACY_INSTANCE_ENV_PATH),
-    ]
-    for legacy in legacy_candidates:
-        if legacy and (not current or looks_uninitialized(current)):
-            current = legacy
-            break
     values.update(current)
     return values
 
