@@ -121,7 +121,7 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
-    location ~ ^/[A-Z][A-Za-z0-9_-]{20,}/ {
+    location ^~ /D {
         proxy_pass http://diag:${DIAG_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
