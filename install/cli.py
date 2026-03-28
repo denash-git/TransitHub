@@ -101,9 +101,10 @@ def run_install() -> int:
     args = build_parser().parse_args()
     overrides = parse_key_value(args.set)
     state = read_state()
-    mode = determine_install_mode(args.mode, state)
 
     banner("TransitHub v2 Installer", "Clean host deploy with local service directories")
+    enforce_installed_lockout(state)
+    mode = determine_install_mode(args.mode, state)
     note(f"Selected mode: {mode}")
     begin_install(mode)
 
@@ -275,12 +276,6 @@ def resume_preflight(overrides: dict[str, str]) -> None:
 
 def determine_install_mode(requested_mode: str, state: dict[str, str]) -> str:
     status = state.get("status", STATUS_FRESH)
-    if status == STATUS_INSTALLED:
-        raise InstallerError(
-            "Installation already completed successfully in this project tree. "
-            "Use `menu` for any post-install changes."
-        )
-
     if requested_mode == "fresh":
         if status in {STATUS_IN_PROGRESS, STATUS_FAILED}:
             raise InstallerError(
@@ -299,6 +294,17 @@ def determine_install_mode(requested_mode: str, state: dict[str, str]) -> str:
     if status in {STATUS_IN_PROGRESS, STATUS_FAILED}:
         return "resume"
     return "fresh"
+
+
+def enforce_installed_lockout(state: dict[str, str]) -> None:
+    if state.get("status", STATUS_FRESH) != STATUS_INSTALLED:
+        return
+    note("Installed runtime already finalized. Prune any restored installer-only sources")
+    prune_deployed_tree()
+    raise InstallerError(
+        "Installation already completed successfully in this project tree. "
+        "Use `menu` for any post-install changes."
+    )
 
 
 def initialize_instance(python: Path, non_interactive: bool, overrides: dict[str, str]) -> dict[str, str]:

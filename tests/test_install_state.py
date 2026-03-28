@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
-from install.cli import InstallerError, determine_install_mode
+from install.cli import InstallerError, determine_install_mode, enforce_installed_lockout
 from transithub_runtime.install_state import begin_install
 from transithub_runtime.install_state import mark_failed
 from transithub_runtime.install_state import mark_installed
@@ -46,13 +47,16 @@ class InstallStateTests(unittest.TestCase):
         self.assertEqual(determine_install_mode("auto", {"status": STATUS_FAILED}), "resume")
 
         with self.assertRaises(InstallerError):
-            determine_install_mode("auto", {"status": STATUS_INSTALLED})
-
-        with self.assertRaises(InstallerError):
             determine_install_mode("fresh", {"status": STATUS_FAILED})
 
         with self.assertRaises(InstallerError):
             determine_install_mode("resume", {"status": STATUS_FRESH})
+
+    def test_installed_lockout_re_prunes_restored_installer_files(self) -> None:
+        with mock.patch("install.cli.prune_deployed_tree") as prune_deployed_tree:
+            with self.assertRaises(InstallerError):
+                enforce_installed_lockout({"status": STATUS_INSTALLED})
+            prune_deployed_tree.assert_called_once()
 
 
 if __name__ == "__main__":
