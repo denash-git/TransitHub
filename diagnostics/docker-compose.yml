@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  diag:
+    build:
+      context: ./diagnostics
+      dockerfile: Dockerfile
+      args:
+        DIAG_BASE_IMAGE: ${DIAG_BASE_IMAGE:-python:3.12.12-slim-bookworm@sha256:b919342376872123c5dc149e0e76d2931ef8875baf0b43775a0e1e5b43fecd22}
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+      DIAG_PATH: ${DIAG_PATH}
+      DIAG_PORT: ${DIAG_PORT:-8765}
+      DIAG_ADMIN_TOKEN: ${DIAG_ADMIN_TOKEN}
+      DIAG_SESSION_TTL_SECONDS: ${DIAG_SESSION_TTL_SECONDS:-900}
+      DIAG_DOWNLOAD_BYTES: ${DIAG_DOWNLOAD_BYTES:-33554432}
+      DIAG_UPLOAD_BYTES: ${DIAG_UPLOAD_BYTES:-16777216}
+      DIAG_DOWNLOAD_STREAMS: ${DIAG_DOWNLOAD_STREAMS:-3}
+      DIAG_UPLOAD_STREAMS: ${DIAG_UPLOAD_STREAMS:-2}
+    ports:
+      - "127.0.0.1:${DIAG_HOST_PORT:-18765}:${DIAG_PORT:-8765}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=5).read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      proxy-net:
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

@@ -352,6 +352,7 @@ def wait_for_runtime_services(values: dict[str, str], *, include_nginx: bool) ->
         wait_for_service_ready("nginx")
     wait_for_service_ready("xui")
     wait_for_service_ready("conv")
+    wait_for_service_ready("diag")
     if tgproxy_enabled(values):
         wait_for_service_ready("tgproxy")
     if netbird_enabled(values):
@@ -818,6 +819,7 @@ def compose_files(values: dict[str, str]) -> list[Path]:
         paths.SERVICE_NGINX_COMPOSE_PATH,
         paths.SERVICE_XUI_COMPOSE_PATH,
         paths.SERVICE_SUBCONVERTER_COMPOSE_PATH,
+        paths.SERVICE_DIAGNOSTICS_COMPOSE_PATH,
     ]
     if tgproxy_enabled(values):
         files.append(paths.SERVICE_TGPROXY_COMPOSE_PATH)
@@ -827,7 +829,7 @@ def compose_files(values: dict[str, str]) -> list[Path]:
 
 
 def runtime_services(values: dict[str, str]) -> list[str]:
-    services = ["xui", "conv"]
+    services = ["xui", "conv", "diag"]
     if tgproxy_enabled(values):
         services.append("tgproxy")
     if netbird_enabled(values):

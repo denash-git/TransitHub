@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import base64
 from pathlib import Path
 import math
 import os
+import re
 import secrets
 import shutil
 import sqlite3
 import string
 import subprocess
 import sys
+import time
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 from transithub_runtime.env import parse_env as shared_parse_env, update_env as shared_update_env
 from transithub_runtime.tgproxy import (
@@ -49,6 +55,7 @@ RENEW_SCRIPT = Path("/usr/local/bin/transithub-certbot-renew")
 NGINX_STOP_SCRIPT = Path("/usr/local/bin/transithub-nginx-stop")
 NGINX_START_SCRIPT = Path("/usr/local/bin/transithub-nginx-start")
 NGINX_RELOAD_SCRIPT = Path("/usr/local/bin/transithub-nginx-reload")
+SPEEDTEST_BIN = Path("/usr/local/bin/speedtest")
 XUI_DB_PATH = PROJECT_ROOT / "xui" / "data" / "x-ui.db"
 NGINX_SITE_CONF_PATH = PROJECT_ROOT / "nginx" / "config" / "site.conf"
 
@@ -96,6 +103,8 @@ def main() -> int:
             netbird_menu()
         elif choice == "6":
             services_menu()
+        elif choice == "7":
+            diagnostics_menu()
         elif choice == "0":
             clear_screen()
             return 0
@@ -533,6 +542,7 @@ def render_main_menu(values: dict[str, str]) -> None:
         "4. TGProxy",
         "5. NetBird",
         "6. Services",
+        "7. Diagnostics",
         danger_menu_option("Exit"),
     ]
     print_block("TransitHub Local Menu", lines, accent=BLUE)
@@ -1159,6 +1169,342 @@ def restart_service(values: dict[str, str], service: str, always_include_netbird
         print_block("Service Recreate Failed", lines or ["Unknown error"], accent=RED)
     else:
         print_block("Services", [f"Service {service} has been recreated."], accent=GREEN)
+    pause()
+
+
+def diagnostics_menu() -> None:
+    while True:
+        values = parse_env(INSTANCE_ENV_PATH)
+        container = service_container_name(values, "diag", include_stopped=True)
+        running = service_is_running(container)
+        lines = [
+            f"Container        : {container or 'not running'}",
+            f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
+            "",
+            "1. VPS Internet Speed",
+            "2. VPS Local PC Speed",
+            danger_menu_option("Back"),
+        ]
+        print_block("Diagnostics", lines, accent=BLUE)
+        choice = prompt("Select an option")
+        if choice == "1":
+            diagnostics_vps_speed_menu(values)
+        elif choice == "2":
+            diagnostics_local_pc_menu(values)
+        elif choice == "0":
+            return
+
+
+def diagnostics_vps_speed_menu(values: dict[str, str]) -> None:
+    while True:
+        lines = [
+            f"Speedtest CLI    : {status_badge(speedtest_available(), 'ready' if speedtest_available() else 'missing')}",
+            "",
+            "1. Run auto test",
+            "2. Choose server",
+            danger_menu_option("Back"),
+        ]
+        print_block("VPS Internet Speed", lines, accent=BLUE)
+        choice = prompt("Select an option")
+        if choice == "1":
+            run_vps_speedtest()
+        elif choice == "2":
+            choose_speedtest_server()
+        elif choice == "0":
+            return
+
+
+def diagnostics_local_pc_menu(values: dict[str, str]) -> None:
+    while True:
+        session = diagnostics_current_session(values)
+        lines = [
+            f"Diagnostics URL  : {diagnostics_session_url(session) or '-'}",
+            f"Session status   : {diagnostics_session_status(session)}",
+            "",
+            "1. Start new browser test",
+            "2. Show active test link",
+            "3. Wait for current result",
+            "4. Show current status",
+            danger_menu_option("Back"),
+        ]
+        print_block("VPS Local PC Speed", lines, accent=BLUE)
+        choice = prompt("Select an option")
+        if choice == "1":
+            start_browser_speed_test(values)
+        elif choice == "2":
+            show_active_browser_speed_test(values)
+        elif choice == "3":
+            wait_for_browser_speed_result(values)
+        elif choice == "4":
+            show_browser_speed_status(values)
+        elif choice == "0":
+            return
+
+
+def speedtest_available() -> bool:
+    return SPEEDTEST_BIN.exists() and command_works([str(SPEEDTEST_BIN), "--version"])
+
+
+def ensure_speedtest_cli_available() -> bool:
+    if speedtest_available():
+        return True
+    print_block(
+        "VPS Internet Speed",
+        ["Speedtest CLI is missing on this host.", "It should be installed during TransitHub installation."],
+        accent=RED,
+    )
+    pause()
+    return False
+
+
+def speedtest_base_command() -> list[str]:
+    return [str(SPEEDTEST_BIN), "--accept-license", "--accept-gdpr"]
+
+
+def run_speedtest_command(command: list[str], title: str, subtitle: str) -> subprocess.CompletedProcess[str]:
+    clear_screen()
+    print_header(title, header_width(title, [subtitle]), accent=BLUE)
+    print()
+    print(f"{INDENT}{subtitle}")
+    print(f"{INDENT}The test may take 20-30 seconds.")
+    print()
+    return run(command)
+
+
+def parse_speedtest_result(payload: dict[str, object]) -> list[str]:
+    server = payload.get("server") if isinstance(payload.get("server"), dict) else {}
+    interface = payload.get("interface") if isinstance(payload.get("interface"), dict) else {}
+    ping = payload.get("ping") if isinstance(payload.get("ping"), dict) else {}
+    download = payload.get("download") if isinstance(payload.get("download"), dict) else {}
+    upload = payload.get("upload") if isinstance(payload.get("upload"), dict) else {}
+    result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+    packet_loss = payload.get("packetLoss", "-")
+
+    def bandwidth_to_mbps(section: dict[str, object]) -> str:
+        try:
+            return f"{float(section.get('bandwidth', 0)) * 8 / 1_000_000:.2f}"
+        except (TypeError, ValueError):
+            return "-"
+
+    started_at = str(payload.get("timestamp", "") or payload.get("date", "") or "-")
+    server_label = ", ".join(
+        part for part in [str(server.get("name", "") or ""), str(server.get("location", "") or ""), str(server.get("country", "") or "")] if part
+    ) or "-"
+    return [
+        f"Started at      : {started_at}",
+        f"Public IP       : {interface.get('externalIp', '-')}",
+        f"Server          : {server_label}",
+        f"Latency         : {ping.get('latency', '-')} ms",
+        f"Jitter          : {ping.get('jitter', '-')} ms",
+        f"Packet loss     : {packet_loss}",
+        f"Download        : {bandwidth_to_mbps(download)} Mbps",
+        f"Upload          : {bandwidth_to_mbps(upload)} Mbps",
+        f"Result URL      : {result.get('url', '-')}",
+    ]
+
+
+def run_vps_speedtest(server_id: str | None = None) -> None:
+    if not ensure_speedtest_cli_available():
+        return
+    command = [*speedtest_base_command(), "--format=json"]
+    subtitle = "Running automatic VPS speed test"
+    if server_id:
+        command.append(f"--server-id={server_id}")
+        subtitle = f"Running VPS speed test against server {server_id}"
+    completed = run_speedtest_command(command, "VPS Internet Speed", subtitle)
+    if completed.returncode != 0:
+        print_block("VPS Internet Speed", [completed.stdout, completed.stderr], accent=RED)
+        pause()
+        return
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError:
+        print_block("VPS Internet Speed", [completed.stdout or "Speedtest did not return valid JSON."], accent=RED)
+        pause()
+        return
+    print_block("VPS Internet Speed", parse_speedtest_result(payload), accent=GREEN)
+    pause()
+
+
+def list_speedtest_servers() -> list[tuple[str, str]]:
+    if not ensure_speedtest_cli_available():
+        return []
+    completed = run([*speedtest_base_command(), "--servers"])
+    if completed.returncode != 0:
+        print_block("Choose Speedtest Server", [completed.stdout, completed.stderr], accent=RED)
+        pause()
+        return []
+    entries: list[tuple[str, str]] = []
+    for raw_line in completed.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = re.match(r"^(\d+)\)\s+(.+)$", line)
+        if match:
+            entries.append((match.group(1), match.group(2).strip()))
+            continue
+        match = re.match(r"^(\d+)\s+(.+)$", line)
+        if match:
+            entries.append((match.group(1), match.group(2).strip()))
+    return entries
+
+
+def choose_speedtest_server() -> None:
+    servers = list_speedtest_servers()
+    if not servers:
+        return
+    shown = servers[:12]
+    lines = [f"{index}. {label} [{server_id}]" for index, (server_id, label) in enumerate(shown, start=1)]
+    lines.extend(["", danger_menu_option("Back")])
+    print_block("Choose Speedtest Server", lines, accent=BLUE)
+    choice = prompt("Select a listed server")
+    if choice == "0":
+        return
+    if not choice.isdigit() or not (1 <= int(choice) <= len(shown)):
+        print_block("Choose Speedtest Server", ["Select one of the listed servers."], accent=RED)
+        pause()
+        return
+    server_id = shown[int(choice) - 1][0]
+    run_vps_speedtest(server_id)
+
+
+def diagnostics_admin_base_url(values: dict[str, str]) -> str:
+    return f"http://127.0.0.1:{values.get('DIAG_HOST_PORT', '').strip() or '18765'}"
+
+
+def diagnostics_admin_request(
+    values: dict[str, str],
+    method: str,
+    path: str,
+    payload: dict[str, object] | None = None,
+) -> dict[str, object]:
+    url = diagnostics_admin_base_url(values) + path
+    data = None
+    headers = {"X-Diagnostics-Admin-Token": values.get("DIAG_ADMIN_TOKEN", "").strip()}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib_request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib_request.urlopen(request, timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        raise RuntimeError(f"Diagnostics API error {exc.code}: {body}") from exc
+    except urllib_error.URLError as exc:
+        raise RuntimeError(f"Diagnostics service is not reachable: {exc.reason}") from exc
+
+
+def diagnostics_current_session(values: dict[str, str]) -> dict[str, object] | None:
+    try:
+        response = diagnostics_admin_request(values, "GET", "/admin/session")
+    except RuntimeError:
+        return None
+    session = response.get("session")
+    return session if isinstance(session, dict) else None
+
+
+def diagnostics_session_url(session: dict[str, object] | None) -> str:
+    if not session:
+        return ""
+    return str(session.get("public_url", "") or "")
+
+
+def diagnostics_session_status(session: dict[str, object] | None) -> str:
+    if not session:
+        return "idle"
+    status = str(session.get("status", "unknown"))
+    if status == "completed":
+        return status_badge(True, status)
+    if status in {"running", "created"}:
+        return f"{YELLOW}{status}{RESET}"
+    return status_badge(False, status)
+
+
+def format_browser_speed_result(session: dict[str, object]) -> list[str]:
+    return [
+        f"Status          : {session.get('status', '-')}",
+        f"Public URL      : {session.get('public_url', '-')}",
+        f"Client IP       : {session.get('client_ip', '-') or '-'}",
+        f"Started at      : {session.get('created_at', '-')}",
+        f"Completed at    : {session.get('completed_at', '-') or '-'}",
+        f"Latency         : {session.get('latency_ms', '-') or '-'} ms",
+        f"Download        : {session.get('download_mbps', '-') or '-'} Mbps",
+        f"Upload          : {session.get('upload_mbps', '-') or '-'} Mbps",
+    ]
+
+
+def start_browser_speed_test(values: dict[str, str]) -> None:
+    try:
+        response = diagnostics_admin_request(values, "POST", "/admin/session")
+    except RuntimeError as exc:
+        print_block("VPS Local PC Speed", [str(exc)], accent=RED)
+        pause()
+        return
+    session = response.get("session")
+    if not isinstance(session, dict):
+        print_block("VPS Local PC Speed", ["Could not create a diagnostics session."], accent=RED)
+        pause()
+        return
+    url = diagnostics_session_url(session)
+    lines = [
+        "Open this URL on your local PC in a browser.",
+        "",
+        f"Test URL        : {url}",
+        "",
+        *clipboard_notice_lines("Diagnostics URL", url),
+    ]
+    print_block("VPS Local PC Speed", lines, accent=GREEN)
+    pause()
+
+
+def show_active_browser_speed_test(values: dict[str, str]) -> None:
+    session = diagnostics_current_session(values)
+    if not session:
+        print_block("VPS Local PC Speed", ["No active diagnostics session exists right now."], accent=RED)
+        pause()
+        return
+    url = diagnostics_session_url(session)
+    lines = [f"Test URL        : {url}", "", *clipboard_notice_lines("Diagnostics URL", url)]
+    print_block("VPS Local PC Speed", lines, accent=BLUE)
+    pause()
+
+
+def wait_for_browser_speed_result(values: dict[str, str]) -> None:
+    session = diagnostics_current_session(values)
+    if not session:
+        print_block("VPS Local PC Speed", ["No active diagnostics session exists right now."], accent=RED)
+        pause()
+        return
+    deadline = time.time() + max(30, int(values.get("DIAG_SESSION_TTL_SECONDS", "900") or "900"))
+    while time.time() < deadline:
+        current = diagnostics_current_session(values)
+        if current and str(current.get("status", "")) == "completed":
+            print_block("VPS Local PC Speed", format_browser_speed_result(current), accent=GREEN)
+            pause()
+            return
+        clear_screen()
+        print_header("VPS Local PC Speed", header_width("VPS Local PC Speed", ["Waiting for the browser test to finish."]), accent=BLUE)
+        print()
+        print(f"{INDENT}Waiting for the browser test to finish.")
+        if current:
+            print(f"{INDENT}{diagnostics_session_url(current)}")
+            print()
+            print(f"{INDENT}Current status: {current.get('status', '-')}")
+        print()
+        time.sleep(2)
+    print_block("VPS Local PC Speed", ["Timed out waiting for the browser result."], accent=RED)
+    pause()
+
+
+def show_browser_speed_status(values: dict[str, str]) -> None:
+    session = diagnostics_current_session(values)
+    if not session:
+        print_block("VPS Local PC Speed", ["No active diagnostics session exists right now."], accent=RED)
+        pause()
+        return
+    accent = GREEN if str(session.get("status", "")) == "completed" else BLUE
+    print_block("VPS Local PC Speed", format_browser_speed_result(session), accent=accent)
     pause()
 
 

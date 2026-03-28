@@ -81,6 +81,7 @@ ENV_FIELDS = [
     ),
     EnvField("TGPROXY_IMAGE", PINNED_RUNTIME_IMAGES["TGPROXY_IMAGE"], True, "Pinned Telegram proxy image digest."),
     EnvField("NETBIRD_IMAGE", PINNED_RUNTIME_IMAGES["NETBIRD_IMAGE"], True, "Pinned NetBird image digest."),
+    EnvField("DIAG_BASE_IMAGE", "python:3.12.12-slim-bookworm@sha256:b919342376872123c5dc149e0e76d2931ef8875baf0b43775a0e1e5b43fecd22", True, "Pinned diagnostics service base image."),
     EnvField("ENABLE_FAKE_SITE", "true", True, "Whether to publish a fake site."),
     EnvField("ENABLE_SUBCONVERTER", "true", True, "Whether to expose the converter behind nginx."),
     EnvField("ENABLE_TGPROXY", "false", True, "Whether to run the Telegram proxy service."),
@@ -126,6 +127,15 @@ ENV_FIELDS = [
     EnvField("STREAM_PANEL_PORT", "9446", False, "Internal nginx stream handoff port for panel HTTPS."),
     EnvField("STREAM_REALITY_PORT", "9447", False, "Internal nginx stream handoff port for REALITY passthrough."),
     EnvField("TGPROXY_PORT", "3128", False, "Internal Telegram proxy listen port."),
+    EnvField("DIAG_PORT", "8765", False, "Internal diagnostics service port inside Docker."),
+    EnvField("DIAG_HOST_PORT", "", False, "Localhost-only diagnostics admin port on the VPS host."),
+    EnvField("DIAG_PATH", "", False, "Randomized public diagnostics path segment."),
+    EnvField("DIAG_ADMIN_TOKEN", "", False, "Local diagnostics admin token used by the runtime menu."),
+    EnvField("DIAG_SESSION_TTL_SECONDS", "900", True, "Diagnostics browser session lifetime in seconds."),
+    EnvField("DIAG_DOWNLOAD_BYTES", "33554432", True, "Per-stream diagnostics download payload size in bytes."),
+    EnvField("DIAG_UPLOAD_BYTES", "16777216", True, "Per-stream diagnostics upload payload size in bytes."),
+    EnvField("DIAG_DOWNLOAD_STREAMS", "3", True, "Number of parallel browser download streams."),
+    EnvField("DIAG_UPLOAD_STREAMS", "2", True, "Number of parallel browser upload streams."),
     EnvField("TGPROXY_SECRET", "", False, "Client-facing Telegram proxy FakeTLS secret."),
     EnvField("CONFIG_USERNAME", "", False, "Panel username."),
     EnvField("CONFIG_PASSWORD", "", False, "Panel password."),
@@ -287,6 +297,9 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     fill_if_empty(generated, "XHTTP_PATH", random_path_token("xhttp"))
     ensure_unique_port(generated, "TROJAN_PORT")
     fill_if_empty(generated, "TROJAN_PATH", random_path_token("trojan"))
+    ensure_unique_port(generated, "DIAG_HOST_PORT")
+    fill_if_empty(generated, "DIAG_PATH", random_path_token("speed"))
+    fill_if_empty(generated, "DIAG_ADMIN_TOKEN", random_token(40))
     fill_if_empty(generated, "CONFIG_USERNAME", random_username(10))
     fill_if_empty(generated, "CONFIG_PASSWORD", random_token(20))
     if generated.get("REALITY_PRIVATE_KEY") in {"", "REPLACE_WITH_XRAY_PRIVATE_KEY"} or generated.get(

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TransitHub Diagnostics</title>
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body class="theme-dark">
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">TransitHub Diagnostics</p>
+        <h1>Local PC Speed Test</h1>
+        <p class="lede">Measure the HTTPS path between your browser and this VPS over the existing 443 ingress.</p>
+      </div>
+      <button id="theme-toggle" class="ghost-button" type="button" aria-label="Toggle theme">Light Theme</button>
+    </header>
+
+    <section class="status-panel">
+      <div class="status-row">
+        <span class="label">Session</span>
+        <span id="session-status" class="value accent">Ready</span>
+      </div>
+      <div class="status-row">
+        <span class="label">Connection</span>
+        <span id="connection-status" class="value">Waiting to start</span>
+      </div>
+      <div class="status-row">
+        <span class="label">Expires</span>
+        <span id="expires-at" class="value">-</span>
+      </div>
+    </section>
+
+    <section class="metrics-grid">
+      <article class="metric-card latency-card">
+        <p class="metric-label">Latency</p>
+        <p id="latency-value" class="metric-value">--</p>
+        <p class="metric-unit">ms median</p>
+      </article>
+      <article class="metric-card download-card">
+        <p class="metric-label">Download</p>
+        <p id="download-value" class="metric-value">--</p>
+        <p class="metric-unit">Mbps</p>
+      </article>
+      <article class="metric-card upload-card">
+        <p class="metric-label">Upload</p>
+        <p id="upload-value" class="metric-value">--</p>
+        <p class="metric-unit">Mbps</p>
+      </article>
+    </section>
+
+    <section class="timeline">
+      <div class="timeline-header">
+        <p class="eyebrow">Run Status</p>
+        <p id="phase-label" class="phase-label">Waiting to start</p>
+      </div>
+      <div class="progress-track">
+        <span id="progress-fill"></span>
+      </div>
+      <div class="phase-steps">
+        <span>Latency</span>
+        <span>Download</span>
+        <span>Upload</span>
+        <span>Done</span>
+      </div>
+    </section>
+
+    <section class="action-bar">
+      <button id="start-test" class="primary-button" type="button">Start Test</button>
+      <button id="retest" class="secondary-button" type="button" disabled>Retest</button>
+      <button id="copy-result" class="ghost-button" type="button" disabled>Copy Result</button>
+    </section>
+
+    <section class="detail-grid">
+      <article class="detail-card">
+        <p class="detail-label">Session URL</p>
+        <p id="session-url" class="detail-value mono">-</p>
+      </article>
+      <article class="detail-card">
+        <p class="detail-label">Started at</p>
+        <p id="started-at" class="detail-value">-</p>
+      </article>
+      <article class="detail-card">
+        <p class="detail-label">Client</p>
+        <p id="client-info" class="detail-value">Browser HTTPS session</p>
+      </article>
+    </section>
+  </main>
+  <script src="./assets/app.js"></script>
+</body>
+</html>

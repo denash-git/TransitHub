@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from transithub_runtime.env import parse_env, update_env
+from transithub_runtime.env import defaults, ensure_generated, parse_env, update_env
 
 
 class EnvTests(unittest.TestCase):
@@ -19,6 +19,13 @@ class EnvTests(unittest.TestCase):
             self.assertEqual(loaded["DOMAIN"], "example.com")
             self.assertEqual(loaded["TZ"], "Europe/Moscow")
             self.assertEqual(loaded["NEW_KEY"], "value")
+
+    def test_ensure_generated_populates_diagnostics_runtime_fields(self) -> None:
+        values = ensure_generated(defaults())
+
+        self.assertTrue(values["DIAG_PATH"])
+        self.assertTrue(values["DIAG_ADMIN_TOKEN"])
+        self.assertTrue(values["DIAG_HOST_PORT"].isdigit())
 
 
 if __name__ == "__main__":

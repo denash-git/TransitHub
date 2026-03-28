@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import platform
 from pathlib import Path
 import shutil
 import subprocess
+import tarfile
+import tempfile
+import urllib.request
 
 from . import paths
 
@@ -49,6 +53,14 @@ TRANSITHUB_MENU_LAUNCHER = Path("/usr/local/bin/menu")
 DOCKER_DAEMON_DIR = Path("/etc/docker")
 DOCKER_DAEMON_CONFIG = DOCKER_DAEMON_DIR / "daemon.json"
 TRANSITHUB_NETBIRD_SYSCTL = Path("/etc/sysctl.d/99-transithub-netbird.conf")
+SPEEDTEST_VERSION = "1.2.0"
+SPEEDTEST_INSTALL_DIR = Path("/opt/speedtest-cli")
+SPEEDTEST_BIN = SPEEDTEST_INSTALL_DIR / "speedtest"
+SPEEDTEST_SYMLINK = Path("/usr/local/bin/speedtest")
+SPEEDTEST_ARCHIVES = {
+    "x86_64": f"https://install.speedtest.net/app/cli/ookla-speedtest-{SPEEDTEST_VERSION}-linux-x86_64.tgz",
+    "aarch64": f"https://install.speedtest.net/app/cli/ookla-speedtest-{SPEEDTEST_VERSION}-linux-aarch64.tgz",
+}
 
 
 def log(message: str) -> None:
@@ -186,6 +198,50 @@ def ensure_docker_dns_config() -> bool:
 
 def certbot_available() -> bool:
     return CERTBOT_BIN.exists() and command_works([str(CERTBOT_BIN), "--version"])
+
+
+def speedtest_available() -> bool:
+    candidate = str(SPEEDTEST_BIN if SPEEDTEST_BIN.exists() else SPEEDTEST_SYMLINK)
+    return Path(candidate).exists() and command_works([candidate, "--version"])
+
+
+def detect_speedtest_architecture() -> str:
+    machine = platform.machine().lower()
+    if machine in {"x86_64", "amd64"}:
+        return "x86_64"
+    if machine in {"aarch64", "arm64"}:
+        return "aarch64"
+    raise ValueError(f"Unsupported CPU architecture for Speedtest CLI: {machine}")
+
+
+def ensure_speedtest_cli() -> None:
+    if speedtest_available():
+        return
+
+    log("Install official Speedtest CLI in /opt/speedtest-cli")
+    archive_url = SPEEDTEST_ARCHIVES[detect_speedtest_architecture()]
+    if SPEEDTEST_INSTALL_DIR.exists():
+        shutil.rmtree(SPEEDTEST_INSTALL_DIR, ignore_errors=True)
+    SPEEDTEST_INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        archive_path = Path(tmpdir) / "speedtest.tgz"
+        with urllib.request.urlopen(archive_url) as response, archive_path.open("wb") as output_file:
+            shutil.copyfileobj(response, output_file)
+        with tarfile.open(archive_path, "r:gz") as archive:
+            archive.extractall(SPEEDTEST_INSTALL_DIR)
+
+    extracted_bin = next((path for path in SPEEDTEST_INSTALL_DIR.rglob("speedtest") if path.is_file()), None)
+    if extracted_bin is None:
+        raise FileNotFoundError(f"Speedtest binary was not found after extracting {archive_url}")
+    if extracted_bin != SPEEDTEST_BIN:
+        shutil.copy2(extracted_bin, SPEEDTEST_BIN)
+    SPEEDTEST_BIN.chmod(0o755)
+
+    log("Ensure speedtest command is available at /usr/local/bin/speedtest")
+    if SPEEDTEST_SYMLINK.exists() or SPEEDTEST_SYMLINK.is_symlink():
+        SPEEDTEST_SYMLINK.unlink()
+    SPEEDTEST_SYMLINK.symlink_to(SPEEDTEST_BIN)
 
 
 def ensure_certbot() -> None:
@@ -384,6 +440,7 @@ def prepare_host() -> dict[str, object]:
     log("Install base host packages")
     run(["apt-get", "install", "-y", *APT_BASE_PACKAGES])
     ensure_certbot()
+    ensure_speedtest_cli()
     ensure_certbot_renewal()
 
     docker_installed = command_exists("docker")
@@ -410,6 +467,7 @@ def prepare_host() -> dict[str, object]:
         "python3": command_exists("python3"),
         "python3_venv": command_works(["python3", "-Im", "ensurepip", "--version"]),
         "certbot": certbot_available(),
+        "speedtest": speedtest_available(),
         "certbot_timer": command_works(["systemctl", "is-enabled", TRANSITHUB_RENEW_TIMER.name]),
         "ufw": command_exists("ufw"),
         "ufw_80": ufw_allows("80/tcp"),
