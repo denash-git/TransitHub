@@ -16,6 +16,7 @@
   --light-color-text-primary: rgba(17, 25, 41, 0.82);
   --light-color-text-secondary: rgba(17, 25, 41, 0.52);
   --success-color: #3ad3ba;
+  --button-color: #4fb99f;
   --panel-width: min(900px, calc(100vw - 56px));
   --panel-radius: 32px;
   --transition-fast: 180ms ease;
@@ -270,15 +271,13 @@ body.theme-light .status-line {
 
 .metrics-strip {
   width: 100%;
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
   margin-top: 14px;
 }
 
 .metric-column {
-  flex: 1 1 0;
   min-height: 172px;
   padding: 20px 22px 22px;
   border-radius: 26px;
@@ -319,7 +318,7 @@ body.theme-light .metric-name {
   font-size: clamp(48px, 5vw, 66px);
   line-height: .95;
   font-weight: 800;
-  color: var(--success-color);
+  color: var(--button-color);
 }
 
 .metric-unit {
@@ -431,7 +430,7 @@ body.theme-light .progress-track {
   }
 
   .metrics-strip {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .metric-column {

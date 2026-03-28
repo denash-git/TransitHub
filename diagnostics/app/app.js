@@ -34,7 +34,7 @@ function formatNumber(value) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return '--';
   }
-  return value.toFixed(value >= 100 ? 0 : 2);
+  return String(Math.round(value));
 }
 
 function setPhase(label, percent) {
