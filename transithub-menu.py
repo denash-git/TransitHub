@@ -49,6 +49,7 @@ CORE_COMPOSE_FILES = [
 ]
 TGPROXY_COMPOSE_FILE = PROJECT_ROOT / "tgproxy" / "docker-compose.yml"
 NETBIRD_COMPOSE_FILE = PROJECT_ROOT / "netbird" / "docker-compose.yml"
+DIAGNOSTICS_COMPOSE_FILE = PROJECT_ROOT / "diagnostics" / "docker-compose.yml"
 NETBIRD_SYSCTL_PATH = Path("/etc/sysctl.d/99-transithub-netbird.conf")
 CERTBOT_BIN = Path("/opt/certbot/bin/certbot")
 RENEW_SCRIPT = Path("/usr/local/bin/transithub-certbot-renew")
@@ -73,6 +74,7 @@ USERNAME_LENGTH = 10
 PASSWORD_LENGTH = 20
 PANEL_PATH_LENGTH = 16
 TGPROXY_CODE_LENGTH = 32
+DIAG_PATH_LENGTH = 24
 
 
 def main() -> int:
@@ -268,6 +270,31 @@ def prompt_tgproxy_access_code(current_code: str) -> str:
         return entered
 
 
+def prompt_diag_path_value(current: str) -> str:
+    default = random_token(max(len(current), DIAG_PATH_LENGTH))
+    error = ""
+    while True:
+        lines = [
+            "Press Enter to accept the generated default value.",
+            "Diagnostics path must contain only lowercase letters and digits.",
+            f"Required length: {len(default)} characters.",
+            "",
+        ]
+        if error:
+            lines.extend([f"{RED}{error}{RESET}", ""])
+        print_block("Diagnostics Route Prefix", lines, accent=YELLOW)
+        entered = read_input(f"New diagnostics path [{default}]: ").strip()
+        if not entered:
+            return default
+        if len(entered) != len(default):
+            error = f"Diagnostics path must contain exactly {len(default)} characters."
+            continue
+        if any(ch not in (string.ascii_lowercase + string.digits) for ch in entered):
+            error = "Diagnostics path can use only lowercase letters and digits."
+            continue
+        return entered
+
+
 def credential_updated_lines(label: str, value: str) -> list[str]:
     emphasized = f"{GREEN}{value}{RESET}"
     return [
@@ -309,6 +336,7 @@ def compose_command(values: dict[str, str], always_include_netbird: bool = False
     ]
     for compose_file in CORE_COMPOSE_FILES:
         command.extend(["-f", str(compose_file)])
+    command.extend(["-f", str(DIAGNOSTICS_COMPOSE_FILE)])
     if bool_env(values.get("ENABLE_TGPROXY")):
         command.extend(["-f", str(TGPROXY_COMPOSE_FILE)])
     if always_include_netbird or bool_env(values.get("ENABLE_NETBIRD")):
@@ -942,6 +970,18 @@ def update_site_conf_panel_path(old_path: str, new_path: str) -> tuple[str, str]
     return original, replaced
 
 
+def update_site_conf_diag_path(old_path: str, new_path: str) -> tuple[str, str]:
+    if not NGINX_SITE_CONF_PATH.exists():
+        raise FileNotFoundError(f"Nginx site config was not found: {NGINX_SITE_CONF_PATH}")
+
+    original = NGINX_SITE_CONF_PATH.read_text(encoding="utf-8")
+    replaced = original.replace(f"location /{old_path}/ {{", f"location /{new_path}/ {{")
+    if replaced == original:
+        raise ValueError(f"Diagnostics path /{old_path}/ was not found in {NGINX_SITE_CONF_PATH}.")
+    NGINX_SITE_CONF_PATH.write_text(replaced, encoding="utf-8")
+    return original, replaced
+
+
 def nginx_test_and_reload(values: dict[str, str]) -> None:
     container = service_container_name(values, "nginx", include_stopped=True)
     if not container:
@@ -1184,9 +1224,11 @@ def diagnostics_menu() -> None:
         lines = [
             f"Container        : {container or 'not running'}",
             f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
+            f"Browser route    : /{values.get('DIAG_PATH', '').strip('/') or '-'}" + ("/" if values.get('DIAG_PATH', '').strip('/') else ""),
             "",
             "1. VPS <--> Internet speed test",
             "2. PC <--> VPS speed test",
+            "3. Rotate browser route prefix",
             danger_menu_option("Back"),
         ]
         print_block("Diagnostics", lines, accent=BLUE)
@@ -1195,6 +1237,8 @@ def diagnostics_menu() -> None:
             diagnostics_vps_speed_menu(values)
         elif choice == "2":
             start_browser_speed_test(values)
+        elif choice == "3":
+            rotate_diagnostics_path(values)
         elif choice == "0":
             return
 
@@ -1502,6 +1546,65 @@ def start_browser_speed_test(values: dict[str, str]) -> None:
         *clipboard_notice_lines("Diagnostics URL", url),
     ]
     print_block("Browser Test Link", lines, accent=GREEN)
+    pause()
+
+
+def recreate_runtime_service(values: dict[str, str], service: str) -> subprocess.CompletedProcess[str]:
+    return run([*compose_command(values, always_include_netbird=True), "up", "-d", "--force-recreate", service])
+
+
+def rotate_diagnostics_path(values: dict[str, str]) -> None:
+    current_path = values.get("DIAG_PATH", "").strip("/")
+    if not current_path:
+        print_block("Diagnostics Route Prefix", ["Current diagnostics route is empty."], accent=RED)
+        pause()
+        return
+
+    new_path = prompt_diag_path_value(current_path)
+    if new_path == current_path:
+        print_block("Diagnostics Route Prefix", ["Diagnostics route was not changed."], accent=RED)
+        pause()
+        return
+
+    original_env = INSTANCE_ENV_PATH.read_text(encoding="utf-8")
+    original_site_conf = ""
+    try:
+        update_env(INSTANCE_ENV_PATH, {"DIAG_PATH": new_path})
+        original_site_conf, _ = update_site_conf_diag_path(current_path, new_path)
+        refreshed_values = parse_env(INSTANCE_ENV_PATH)
+        recreate_result = recreate_runtime_service(refreshed_values, "diag")
+        if recreate_result.returncode != 0:
+            raise RuntimeError((recreate_result.stdout or "") + (recreate_result.stderr or ""))
+        nginx_test_and_reload(refreshed_values)
+    except Exception as exc:
+        INSTANCE_ENV_PATH.write_text(original_env, encoding="utf-8")
+        if original_site_conf:
+            NGINX_SITE_CONF_PATH.write_text(original_site_conf, encoding="utf-8")
+        restored_values = parse_env(INSTANCE_ENV_PATH)
+        try:
+            recreate_runtime_service(restored_values, "diag")
+        except Exception:
+            pass
+        try:
+            nginx_test_and_reload(restored_values)
+        except Exception:
+            pass
+        print_block("Diagnostics Route Prefix", [str(exc)], accent=RED)
+        pause()
+        return
+
+    domain = values.get("DOMAIN", "").strip()
+    browser_url = f"https://{domain}/{new_path}/<token>/" if domain else f"/{new_path}/<token>/"
+    lines = [
+        "Diagnostics browser route updated successfully.",
+        "",
+        f"Old route      : /{current_path}/",
+        f"New route      : /{new_path}/",
+        f"URL pattern    : {browser_url}",
+        "",
+        "All previously issued browser links are now invalid.",
+    ]
+    print_block("Diagnostics Route Prefix", lines, accent=GREEN)
     pause()
 
 

@@ -309,9 +309,10 @@ body.theme-light .metric-name {
 .metric-reading {
   display: inline-flex;
   align-items: baseline;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
   min-height: 74px;
+  align-self: center;
 }
 
 .metric-value {
