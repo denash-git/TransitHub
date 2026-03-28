@@ -1221,9 +1221,15 @@ def diagnostics_local_pc_menu(values: dict[str, str]) -> None:
             f"Diagnostics URL  : {diagnostics_session_url(session) or '-'}",
             f"Session status   : {diagnostics_session_status(session)}",
             "",
-            "1. Start new browser test",
-            "2. Show active test link",
-            "3. Wait for current result",
+            "Flow:",
+            "1. Create a temporary browser session here.",
+            "2. Open the issued URL on your local PC.",
+            "3. Press Start Test in the browser page.",
+            "4. Return here only if you want to watch the result.",
+            "",
+            "1. Create new browser session",
+            "2. Show current session link",
+            "3. Watch current result",
             "4. Show current status",
             danger_menu_option("Back"),
         ]
@@ -1262,13 +1268,34 @@ def speedtest_base_command() -> list[str]:
 
 
 def run_speedtest_command(command: list[str], title: str, subtitle: str) -> subprocess.CompletedProcess[str]:
-    clear_screen()
-    print_header(title, header_width(title, [subtitle]), accent=BLUE)
-    print()
-    print(f"{INDENT}{subtitle}")
-    print(f"{INDENT}The test may take 20-30 seconds.")
-    print()
-    return run(command)
+    process = subprocess.Popen(
+        command,
+        cwd=PROJECT_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    started_at = time.time()
+    spinner = ["|", "/", "-", "\\"]
+    index = 0
+
+    while process.poll() is None:
+        elapsed = int(time.time() - started_at)
+        lines = [
+            subtitle,
+            "The test may take 20-30 seconds.",
+            "",
+            f"Status          : running {spinner[index % len(spinner)]}",
+            f"Elapsed         : {elapsed}s",
+            "",
+            "Speedtest CLI is still working. Results will appear automatically.",
+        ]
+        print_block(title, lines, accent=BLUE)
+        time.sleep(0.2)
+        index += 1
+
+    stdout, stderr = process.communicate()
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def parse_speedtest_result(payload: dict[str, object]) -> list[str]:
@@ -1290,17 +1317,24 @@ def parse_speedtest_result(payload: dict[str, object]) -> list[str]:
     server_label = ", ".join(
         part for part in [str(server.get("name", "") or ""), str(server.get("location", "") or ""), str(server.get("country", "") or "")] if part
     ) or "-"
-    return [
+    result_url = str(result.get("url", "") or "")
+    lines = [
         f"Started at      : {started_at}",
         f"Public IP       : {interface.get('externalIp', '-')}",
         f"Server          : {server_label}",
-        f"Latency         : {ping.get('latency', '-')} ms",
+        f"Latency (RTT)   : {ping.get('latency', '-')} ms",
         f"Jitter          : {ping.get('jitter', '-')} ms",
         f"Packet loss     : {packet_loss}",
         f"Download        : {bandwidth_to_mbps(download)} Mbps",
         f"Upload          : {bandwidth_to_mbps(upload)} Mbps",
-        f"Result URL      : {result.get('url', '-')}",
+        f"Share URL       : {result_url or '-'}",
+        "",
+        "Latency is the round-trip delay to the selected speedtest server.",
+        "Jitter is how much that latency changes between samples.",
     ]
+    if result_url:
+        lines.extend(["", *clipboard_notice_lines("Speedtest share URL", result_url)])
+    return lines
 
 
 def run_vps_speedtest(server_id: str | None = None) -> None:
@@ -1326,9 +1360,27 @@ def run_vps_speedtest(server_id: str | None = None) -> None:
     pause()
 
 
+def speedtest_server_country(label: str) -> str:
+    parts = [part.strip() for part in re.split(r"\s{2,}", label) if part.strip()]
+    return parts[-1] if parts else ""
+
+
+def format_speedtest_server_label(label: str) -> str:
+    parts = [part.strip() for part in re.split(r"\s{2,}", label) if part.strip()]
+    if len(parts) >= 3:
+        name, location, country = parts[0], parts[1], parts[2]
+        return f"{country} | {location} | {name}"
+    return label
+
+
 def list_speedtest_servers() -> list[tuple[str, str]]:
     if not ensure_speedtest_cli_available():
         return []
+    print_block(
+        "Choose Speedtest Server",
+        ["Loading available speedtest servers.", "Russia is excluded from the manual list."],
+        accent=BLUE,
+    )
     completed = run([*speedtest_base_command(), "--servers"])
     if completed.returncode != 0:
         print_block("Choose Speedtest Server", [completed.stdout, completed.stderr], accent=RED)
@@ -1346,16 +1398,32 @@ def list_speedtest_servers() -> list[tuple[str, str]]:
         match = re.match(r"^(\d+)\s+(.+)$", line)
         if match:
             entries.append((match.group(1), match.group(2).strip()))
-    return entries
+    filtered = [(server_id, label) for server_id, label in entries if speedtest_server_country(label).lower() != "russia"]
+    unique_by_country: list[tuple[str, str]] = []
+    country_seen: set[str] = set()
+    remainder: list[tuple[str, str]] = []
+    for server_id, label in filtered:
+        country = speedtest_server_country(label).strip().lower()
+        if country and country not in country_seen:
+            unique_by_country.append((server_id, label))
+            country_seen.add(country)
+        else:
+            remainder.append((server_id, label))
+    return unique_by_country + remainder
 
 
 def choose_speedtest_server() -> None:
     servers = list_speedtest_servers()
     if not servers:
         return
-    shown = servers[:12]
-    lines = [f"{index}. {label} [{server_id}]" for index, (server_id, label) in enumerate(shown, start=1)]
-    lines.extend(["", danger_menu_option("Back")])
+    shown = servers[:18]
+    lines = [
+        "Manual list: non-Russian servers, prioritised by different countries.",
+        "",
+        *[f"{index}. {format_speedtest_server_label(label)} [{server_id}]" for index, (server_id, label) in enumerate(shown, start=1)],
+        "",
+        danger_menu_option("Back"),
+    ]
     print_block("Choose Speedtest Server", lines, accent=BLUE)
     choice = prompt("Select a listed server")
     if choice == "0":
@@ -1448,7 +1516,9 @@ def start_browser_speed_test(values: dict[str, str]) -> None:
         return
     url = diagnostics_session_url(session)
     lines = [
-        "Open this URL on your local PC in a browser.",
+        "A temporary browser session is ready.",
+        "Open this URL on your local PC, then start the test from the page itself.",
+        "Creating a new session later will replace the current one.",
         "",
         f"Test URL        : {url}",
         "",
@@ -1465,7 +1535,13 @@ def show_active_browser_speed_test(values: dict[str, str]) -> None:
         pause()
         return
     url = diagnostics_session_url(session)
-    lines = [f"Test URL        : {url}", "", *clipboard_notice_lines("Diagnostics URL", url)]
+    lines = [
+        "Open this URL on your local PC and run the test there.",
+        "",
+        f"Test URL        : {url}",
+        "",
+        *clipboard_notice_lines("Diagnostics URL", url),
+    ]
     print_block("VPS Local PC Speed", lines, accent=BLUE)
     pause()
 
@@ -1484,9 +1560,10 @@ def wait_for_browser_speed_result(values: dict[str, str]) -> None:
             pause()
             return
         clear_screen()
-        print_header("VPS Local PC Speed", header_width("VPS Local PC Speed", ["Waiting for the browser test to finish."]), accent=BLUE)
+        print_header("VPS Local PC Speed", header_width("VPS Local PC Speed", ["Waiting for the browser page to finish the test."]), accent=BLUE)
         print()
-        print(f"{INDENT}Waiting for the browser test to finish.")
+        print(f"{INDENT}Waiting for the browser page to finish the test.")
+        print(f"{INDENT}The test must be started from the issued URL on your local PC.")
         if current:
             print(f"{INDENT}{diagnostics_session_url(current)}")
             print()

@@ -18,6 +18,7 @@ const elements = {
   phaseLabel: document.getElementById('phase-label'),
   progressFill: document.getElementById('progress-fill'),
   sessionUrl: document.getElementById('session-url'),
+  currentUrl: document.getElementById('current-url'),
   startedAt: document.getElementById('started-at'),
   clientInfo: document.getElementById('client-info'),
 };
@@ -59,6 +60,8 @@ async function loadConfig() {
   state.config = config;
   elements.expiresAt.textContent = new Date(config.expires_at).toLocaleString();
   elements.sessionUrl.textContent = config.public_url;
+  elements.currentUrl.textContent = window.location.href;
+  elements.startedAt.textContent = 'Session created in TransitHub menu';
 }
 
 async function measureLatency() {
@@ -218,6 +221,7 @@ async function main() {
   loadTheme();
   bindEvents();
   await loadConfig();
+  elements.clientInfo.textContent = navigator.userAgent;
   setPhase('Ready to start', 0);
 }
 
