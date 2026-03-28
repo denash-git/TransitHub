@@ -129,7 +129,7 @@ ENV_FIELDS = [
     EnvField("TGPROXY_PORT", "3128", False, "Internal Telegram proxy listen port."),
     EnvField("DIAG_PORT", "8765", False, "Internal diagnostics service port inside Docker."),
     EnvField("DIAG_HOST_PORT", "", False, "Localhost-only diagnostics admin port on the VPS host."),
-    EnvField("DIAG_PATH", "", False, "Randomized public diagnostics path segment."),
+    EnvField("DIAG_PATH", "", False, "Opaque public diagnostics route prefix."),
     EnvField("DIAG_ADMIN_TOKEN", "", False, "Local diagnostics admin token used by the runtime menu."),
     EnvField("DIAG_SESSION_TTL_SECONDS", "300", True, "Diagnostics browser session lifetime in seconds."),
     EnvField("DIAG_DOWNLOAD_BYTES", "33554432", True, "Per-stream diagnostics download payload size in bytes."),
@@ -298,7 +298,7 @@ def ensure_generated(values: dict[str, str]) -> dict[str, str]:
     ensure_unique_port(generated, "TROJAN_PORT")
     fill_if_empty(generated, "TROJAN_PATH", random_path_token("trojan"))
     ensure_unique_port(generated, "DIAG_HOST_PORT")
-    fill_if_empty(generated, "DIAG_PATH", random_path_token("speed"))
+    fill_if_empty(generated, "DIAG_PATH", random_token(24))
     fill_if_empty(generated, "DIAG_ADMIN_TOKEN", random_token(40))
     fill_if_empty(generated, "CONFIG_USERNAME", random_username(10))
     fill_if_empty(generated, "CONFIG_PASSWORD", random_token(20))

@@ -1185,8 +1185,8 @@ def diagnostics_menu() -> None:
             f"Container        : {container or 'not running'}",
             f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
             "",
-            "1. VPS Internet Speed",
-            "2. Create Link URL Browser Test",
+            "1. VPS <--> Internet speed test",
+            "2. PC <--> VPS speed test",
             danger_menu_option("Back"),
         ]
         print_block("Diagnostics", lines, accent=BLUE)

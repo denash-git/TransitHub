@@ -59,11 +59,11 @@ class DiagnosticsState:
                 self.session = None
 
     def public_url(self, token: str) -> str:
-        return f"https://{self.domain}/{token}/"
+        return f"https://{self.domain}/{self.diag_path}/{token}/"
 
     def create_session(self) -> dict[str, object]:
         with self.lock:
-            token = f"D{token_urlsafe(18)}"
+            token = token_urlsafe(18)
             now = utc_now()
             self.session = {
                 "token": token,
