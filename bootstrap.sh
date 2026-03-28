@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_URL="${TRANSITHUB_REPO_URL:-https://github.com/denash-git/TransitHub.git}"
 BRANCH="${TRANSITHUB_BRANCH:-main}"
 RAW_BOOTSTRAP_URL="${TRANSITHUB_BOOTSTRAP_URL:-https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh}"
+TARGET_USER="${SUDO_USER:-${USER:-root}}"
 
 resolve_home_dir() {
   local target_user="$1"
@@ -28,13 +29,26 @@ resolve_install_dir() {
     return
   fi
 
-  local target_user="${SUDO_USER:-${USER:-root}}"
   local home_dir
-  home_dir="$(resolve_home_dir "$target_user")"
+  home_dir="$(resolve_home_dir "$TARGET_USER")"
   printf '%s' "${home_dir%/}/TransitHub"
 }
 
 INSTALL_DIR="$(resolve_install_dir)"
+
+run_as_target_user() {
+  if [[ "$TARGET_USER" != "root" && "${EUID:-$(id -u)}" -eq 0 ]]; then
+    sudo -u "$TARGET_USER" -H "$@"
+    return
+  fi
+  "$@"
+}
+
+ensure_install_dir_owner() {
+  if [[ "$TARGET_USER" != "root" && -e "$INSTALL_DIR" ]]; then
+    chown -R "$TARGET_USER":"$TARGET_USER" "$INSTALL_DIR"
+  fi
+}
 
 rerun_with_sudo() {
   if ! command -v sudo >/dev/null 2>&1; then
@@ -76,10 +90,11 @@ ensure_git() {
 }
 
 prepare_checkout() {
+  ensure_install_dir_owner
   if [[ -d "$INSTALL_DIR/.git" ]]; then
-    git -C "$INSTALL_DIR" fetch origin "$BRANCH" --prune
-    git -C "$INSTALL_DIR" checkout "$BRANCH"
-    git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
+    run_as_target_user git -C "$INSTALL_DIR" fetch origin "$BRANCH" --prune
+    run_as_target_user git -C "$INSTALL_DIR" checkout "$BRANCH"
+    run_as_target_user git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
     return
   fi
 
@@ -88,7 +103,7 @@ prepare_checkout() {
     exit 1
   fi
 
-  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+  run_as_target_user git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
 }
 
 main() {
