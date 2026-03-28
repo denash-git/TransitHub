@@ -1181,12 +1181,9 @@ def diagnostics_menu() -> None:
         values = parse_env(INSTANCE_ENV_PATH)
         container = service_container_name(values, "diag", include_stopped=True)
         running = service_is_running(container)
-        session = diagnostics_current_session(values)
         lines = [
             f"Container        : {container or 'not running'}",
             f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
-            f"Browser URL      : {diagnostics_session_url(session) or '-'}",
-            f"Session status   : {diagnostics_session_status(session)}",
             "",
             "1. VPS Internet Speed",
             "2. Create Link URL Browser Test",
@@ -1295,9 +1292,8 @@ def parse_speedtest_result(payload: dict[str, object]) -> list[str]:
     result_url = str(result.get("url", "") or "")
     lines = [
         f"Started at      : {started_at}",
-        f"Public IP       : {interface.get('externalIp', '-')}",
         f"Server          : {server_label}",
-        f"Latency (RTT)   : {ping.get('latency', '-')} ms",
+        f"Ping            : {ping.get('latency', '-')} ms",
         f"Jitter          : {ping.get('jitter', '-')} ms",
         f"Packet loss     : {packet_loss}",
         f"Download        : {bandwidth_to_mbps(download)} Mbps",
@@ -1320,6 +1316,19 @@ def run_vps_speedtest(server_id: str | None = None) -> None:
     if server_id:
         command.append(f"--server-id={server_id}")
         subtitle = f"Running VPS speed test against server {server_id}"
+    else:
+        auto_servers = list_speedtest_servers(excluded_countries={"russia", "ukraine"}, show_loading=False)
+        if not auto_servers:
+            print_block(
+                "VPS Internet Speed",
+                ["No eligible auto-selected server was found outside Russia and Ukraine."],
+                accent=RED,
+            )
+            pause()
+            return
+        auto_server_id, auto_label = auto_servers[0]
+        command.append(f"--server-id={auto_server_id}")
+        subtitle = f"Running VPS speed test against {format_speedtest_server_label(auto_label)}"
     completed = run_speedtest_command(command, "VPS Internet Speed", subtitle)
     if completed.returncode != 0:
         print_block("VPS Internet Speed", [completed.stdout, completed.stderr], accent=RED)
@@ -1348,14 +1357,19 @@ def format_speedtest_server_label(label: str) -> str:
     return label
 
 
-def list_speedtest_servers() -> list[tuple[str, str]]:
+def list_speedtest_servers(
+    *,
+    excluded_countries: set[str] | None = None,
+    show_loading: bool = True,
+) -> list[tuple[str, str]]:
     if not ensure_speedtest_cli_available():
         return []
-    print_block(
-        "Choose Speedtest Server",
-        ["Loading available speedtest servers.", "Russia and Ukraine are excluded from the manual list."],
-        accent=BLUE,
-    )
+    if show_loading:
+        print_block(
+            "Choose Speedtest Server",
+            ["Loading available speedtest servers.", "Ukraine is excluded from the manual list."],
+            accent=BLUE,
+        )
     completed = run([*speedtest_base_command(), "--servers"])
     if completed.returncode != 0:
         print_block("Choose Speedtest Server", [completed.stdout, completed.stderr], accent=RED)
@@ -1373,8 +1387,8 @@ def list_speedtest_servers() -> list[tuple[str, str]]:
         match = re.match(r"^(\d+)\s+(.+)$", line)
         if match:
             entries.append((match.group(1), match.group(2).strip()))
-    excluded_countries = {"russia", "ukraine"}
-    filtered = [(server_id, label) for server_id, label in entries if speedtest_server_country(label).lower() not in excluded_countries]
+    blocked = {country.strip().lower() for country in (excluded_countries or set()) if country.strip()}
+    filtered = [(server_id, label) for server_id, label in entries if speedtest_server_country(label).lower() not in blocked]
     unique_by_country: list[tuple[str, str]] = []
     country_seen: set[str] = set()
     remainder: list[tuple[str, str]] = []
@@ -1389,12 +1403,12 @@ def list_speedtest_servers() -> list[tuple[str, str]]:
 
 
 def choose_speedtest_server() -> None:
-    servers = list_speedtest_servers()
+    servers = list_speedtest_servers(excluded_countries={"ukraine"})
     if not servers:
         return
     shown = servers[:18]
     lines = [
-        "Manual list: non-Russian and non-Ukrainian servers, prioritised by different countries.",
+        "Manual list: Ukraine is excluded. Russia is allowed here.",
         "",
         *[f"{index}. {format_speedtest_server_label(label)} [{server_id}]" for index, (server_id, label) in enumerate(shown, start=1)],
         "",

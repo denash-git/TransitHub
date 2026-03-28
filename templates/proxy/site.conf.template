@@ -121,8 +121,8 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
-    location /${DIAG_PATH}/ {
-        proxy_pass http://diag:${DIAG_PORT}/;
+    location ~ ^/[A-Z][A-Za-z0-9_-]{20,}/ {
+        proxy_pass http://diag:${DIAG_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Real-IP $remote_addr;

@@ -30,7 +30,7 @@ class DiagnosticsServiceTests(unittest.TestCase):
             session = state.create_session()
             token = session["token"]
             self.assertEqual(session["status"], "created")
-            self.assertIn("/speed-test/", session["public_url"])
+            self.assertTrue(str(session["public_url"]).startswith("https://example.com/D"))
 
             touched = state.touch_client(token, "127.0.0.1", "pytest")
             self.assertEqual(touched["status"], "running")
