@@ -13,7 +13,7 @@
         <div>
           <p class="eyebrow">TransitHub Diagnostics</p>
           <h1>Local PC Speed Test</h1>
-          <p class="lede">This temporary HTTPS session was created from TransitHub menu. The test runs here in your browser over the existing 443 ingress. Back in the menu, you can only watch the current result.</p>
+          <p class="lede">This temporary HTTPS session was created from TransitHub menu. The test runs here in your browser over the existing 443 ingress. The issued link is valid for 5 minutes and no result history is saved.</p>
         </div>
         <div class="pill-group">
           <button id="theme-toggle" class="theme-button" type="button" aria-label="Toggle theme">Light Theme</button>
@@ -28,7 +28,7 @@
               <span class="step-index">01</span>
               <div class="step-copy">
                 <strong>Session created in menu</strong>
-                <span>TransitHub menu issued this temporary test URL. Creating a new one there replaces the current session.</span>
+                <span>TransitHub menu issued this temporary test URL. Creating a new one there replaces the current session. The link stays valid for 5 minutes.</span>
               </div>
             </li>
             <li>
@@ -41,8 +41,8 @@
             <li>
               <span class="step-index">03</span>
               <div class="step-copy">
-                <strong>Use menu only for watching</strong>
-                <span>The test itself does not start from the backend. The menu just creates the session and can display the current outcome.</span>
+                <strong>The browser runs the test</strong>
+                <span>The test itself does not start from the backend. TransitHub menu only creates the link for the current browser session.</span>
               </div>
             </li>
           </ol>
@@ -52,7 +52,7 @@
           <h3>Current Session</h3>
           <p class="label">Temporary URL</p>
           <p id="session-url" class="detail-value mono">-</p>
-          <p class="helper">This session expires automatically. No result history is stored after the current interaction.</p>
+          <p class="helper">This session expires automatically after 5 minutes. No result history is stored after the current interaction.</p>
         </article>
       </div>
     </section>

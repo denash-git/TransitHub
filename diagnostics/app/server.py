@@ -43,7 +43,7 @@ class DiagnosticsState:
         self.domain = os.environ.get("DOMAIN", "").strip()
         self.diag_path = os.environ.get("DIAG_PATH", "").strip().strip("/")
         self.admin_token = os.environ.get("DIAG_ADMIN_TOKEN", "").strip()
-        self.ttl_seconds = env_int("DIAG_SESSION_TTL_SECONDS", 900)
+        self.ttl_seconds = env_int("DIAG_SESSION_TTL_SECONDS", 300)
         self.download_bytes = env_int("DIAG_DOWNLOAD_BYTES", 33554432)
         self.upload_bytes = env_int("DIAG_UPLOAD_BYTES", 16777216)
         self.download_streams = env_int("DIAG_DOWNLOAD_STREAMS", 3)

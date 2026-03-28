@@ -131,7 +131,7 @@ ENV_FIELDS = [
     EnvField("DIAG_HOST_PORT", "", False, "Localhost-only diagnostics admin port on the VPS host."),
     EnvField("DIAG_PATH", "", False, "Randomized public diagnostics path segment."),
     EnvField("DIAG_ADMIN_TOKEN", "", False, "Local diagnostics admin token used by the runtime menu."),
-    EnvField("DIAG_SESSION_TTL_SECONDS", "900", True, "Diagnostics browser session lifetime in seconds."),
+    EnvField("DIAG_SESSION_TTL_SECONDS", "300", True, "Diagnostics browser session lifetime in seconds."),
     EnvField("DIAG_DOWNLOAD_BYTES", "33554432", True, "Per-stream diagnostics download payload size in bytes."),
     EnvField("DIAG_UPLOAD_BYTES", "16777216", True, "Per-stream diagnostics upload payload size in bytes."),
     EnvField("DIAG_DOWNLOAD_STREAMS", "3", True, "Number of parallel browser download streams."),

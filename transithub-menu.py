@@ -131,7 +131,11 @@ def read_input(prompt_text: str) -> str:
 
 def prompt(label: str) -> str:
     print()
-    return read_input(f"{YELLOW}{label}:{RESET} ").strip()
+    choice = read_input(f"{YELLOW}{label}:{RESET} ").strip()
+    if choice == "00":
+        clear_screen()
+        raise SystemExit(0)
+    return choice
 
 
 def pause(message: str = "Press Enter to continue") -> None:
@@ -1177,12 +1181,15 @@ def diagnostics_menu() -> None:
         values = parse_env(INSTANCE_ENV_PATH)
         container = service_container_name(values, "diag", include_stopped=True)
         running = service_is_running(container)
+        session = diagnostics_current_session(values)
         lines = [
             f"Container        : {container or 'not running'}",
             f"Status           : {status_badge(running, 'running' if running else 'stopped')}",
+            f"Browser URL      : {diagnostics_session_url(session) or '-'}",
+            f"Session status   : {diagnostics_session_status(session)}",
             "",
             "1. VPS Internet Speed",
-            "2. VPS Local PC Speed",
+            "2. Create Link URL Browser Test",
             danger_menu_option("Back"),
         ]
         print_block("Diagnostics", lines, accent=BLUE)
@@ -1190,7 +1197,7 @@ def diagnostics_menu() -> None:
         if choice == "1":
             diagnostics_vps_speed_menu(values)
         elif choice == "2":
-            diagnostics_local_pc_menu(values)
+            start_browser_speed_test(values)
         elif choice == "0":
             return
 
@@ -1210,39 +1217,6 @@ def diagnostics_vps_speed_menu(values: dict[str, str]) -> None:
             run_vps_speedtest()
         elif choice == "2":
             choose_speedtest_server()
-        elif choice == "0":
-            return
-
-
-def diagnostics_local_pc_menu(values: dict[str, str]) -> None:
-    while True:
-        session = diagnostics_current_session(values)
-        lines = [
-            f"Diagnostics URL  : {diagnostics_session_url(session) or '-'}",
-            f"Session status   : {diagnostics_session_status(session)}",
-            "",
-            "Flow:",
-            "1. Create a temporary browser session here.",
-            "2. Open the issued URL on your local PC.",
-            "3. Press Start Test in the browser page.",
-            "4. Return here only if you want to watch the result.",
-            "",
-            "1. Create new browser session",
-            "2. Show current session link",
-            "3. Watch current result",
-            "4. Show current status",
-            danger_menu_option("Back"),
-        ]
-        print_block("VPS Local PC Speed", lines, accent=BLUE)
-        choice = prompt("Select an option")
-        if choice == "1":
-            start_browser_speed_test(values)
-        elif choice == "2":
-            show_active_browser_speed_test(values)
-        elif choice == "3":
-            wait_for_browser_speed_result(values)
-        elif choice == "4":
-            show_browser_speed_status(values)
         elif choice == "0":
             return
 
@@ -1268,6 +1242,12 @@ def speedtest_base_command() -> list[str]:
 
 
 def run_speedtest_command(command: list[str], title: str, subtitle: str) -> subprocess.CompletedProcess[str]:
+    clear_screen()
+    print_header(title, header_width(title, [subtitle]), accent=BLUE)
+    print()
+    print(f"{INDENT}{subtitle}")
+    print(f"{INDENT}The test may take 20-30 seconds.")
+    print()
     process = subprocess.Popen(
         command,
         cwd=PROJECT_ROOT,
@@ -1281,20 +1261,15 @@ def run_speedtest_command(command: list[str], title: str, subtitle: str) -> subp
 
     while process.poll() is None:
         elapsed = int(time.time() - started_at)
-        lines = [
-            subtitle,
-            "The test may take 20-30 seconds.",
-            "",
-            f"Status          : running {spinner[index % len(spinner)]}",
-            f"Elapsed         : {elapsed}s",
-            "",
-            "Speedtest CLI is still working. Results will appear automatically.",
-        ]
-        print_block(title, lines, accent=BLUE)
+        status_line = f"{INDENT}Status          : running {spinner[index % len(spinner)]}   Elapsed: {elapsed}s   "
+        print(f"\r{status_line}", end="", flush=True)
         time.sleep(0.2)
         index += 1
 
     stdout, stderr = process.communicate()
+    print("\r" + " " * 120, end="")
+    print(f"\r{INDENT}Status          : completed")
+    print()
     return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
@@ -1378,7 +1353,7 @@ def list_speedtest_servers() -> list[tuple[str, str]]:
         return []
     print_block(
         "Choose Speedtest Server",
-        ["Loading available speedtest servers.", "Russia is excluded from the manual list."],
+        ["Loading available speedtest servers.", "Russia and Ukraine are excluded from the manual list."],
         accent=BLUE,
     )
     completed = run([*speedtest_base_command(), "--servers"])
@@ -1398,7 +1373,8 @@ def list_speedtest_servers() -> list[tuple[str, str]]:
         match = re.match(r"^(\d+)\s+(.+)$", line)
         if match:
             entries.append((match.group(1), match.group(2).strip()))
-    filtered = [(server_id, label) for server_id, label in entries if speedtest_server_country(label).lower() != "russia"]
+    excluded_countries = {"russia", "ukraine"}
+    filtered = [(server_id, label) for server_id, label in entries if speedtest_server_country(label).lower() not in excluded_countries]
     unique_by_country: list[tuple[str, str]] = []
     country_seen: set[str] = set()
     remainder: list[tuple[str, str]] = []
@@ -1418,7 +1394,7 @@ def choose_speedtest_server() -> None:
         return
     shown = servers[:18]
     lines = [
-        "Manual list: non-Russian servers, prioritised by different countries.",
+        "Manual list: non-Russian and non-Ukrainian servers, prioritised by different countries.",
         "",
         *[f"{index}. {format_speedtest_server_label(label)} [{server_id}]" for index, (server_id, label) in enumerate(shown, start=1)],
         "",
@@ -1489,19 +1465,6 @@ def diagnostics_session_status(session: dict[str, object] | None) -> str:
     return status_badge(False, status)
 
 
-def format_browser_speed_result(session: dict[str, object]) -> list[str]:
-    return [
-        f"Status          : {session.get('status', '-')}",
-        f"Public URL      : {session.get('public_url', '-')}",
-        f"Client IP       : {session.get('client_ip', '-') or '-'}",
-        f"Started at      : {session.get('created_at', '-')}",
-        f"Completed at    : {session.get('completed_at', '-') or '-'}",
-        f"Latency         : {session.get('latency_ms', '-') or '-'} ms",
-        f"Download        : {session.get('download_mbps', '-') or '-'} Mbps",
-        f"Upload          : {session.get('upload_mbps', '-') or '-'} Mbps",
-    ]
-
-
 def start_browser_speed_test(values: dict[str, str]) -> None:
     try:
         response = diagnostics_admin_request(values, "POST", "/admin/session")
@@ -1516,72 +1479,15 @@ def start_browser_speed_test(values: dict[str, str]) -> None:
         return
     url = diagnostics_session_url(session)
     lines = [
-        "A temporary browser session is ready.",
-        "Open this URL on your local PC, then start the test from the page itself.",
-        "Creating a new session later will replace the current one.",
+        "Browser test link is ready.",
+        "This link is valid for 5 minutes.",
+        "Open it on your local PC and start the test from the page itself.",
         "",
         f"Test URL        : {url}",
         "",
         *clipboard_notice_lines("Diagnostics URL", url),
     ]
-    print_block("VPS Local PC Speed", lines, accent=GREEN)
-    pause()
-
-
-def show_active_browser_speed_test(values: dict[str, str]) -> None:
-    session = diagnostics_current_session(values)
-    if not session:
-        print_block("VPS Local PC Speed", ["No active diagnostics session exists right now."], accent=RED)
-        pause()
-        return
-    url = diagnostics_session_url(session)
-    lines = [
-        "Open this URL on your local PC and run the test there.",
-        "",
-        f"Test URL        : {url}",
-        "",
-        *clipboard_notice_lines("Diagnostics URL", url),
-    ]
-    print_block("VPS Local PC Speed", lines, accent=BLUE)
-    pause()
-
-
-def wait_for_browser_speed_result(values: dict[str, str]) -> None:
-    session = diagnostics_current_session(values)
-    if not session:
-        print_block("VPS Local PC Speed", ["No active diagnostics session exists right now."], accent=RED)
-        pause()
-        return
-    deadline = time.time() + max(30, int(values.get("DIAG_SESSION_TTL_SECONDS", "900") or "900"))
-    while time.time() < deadline:
-        current = diagnostics_current_session(values)
-        if current and str(current.get("status", "")) == "completed":
-            print_block("VPS Local PC Speed", format_browser_speed_result(current), accent=GREEN)
-            pause()
-            return
-        clear_screen()
-        print_header("VPS Local PC Speed", header_width("VPS Local PC Speed", ["Waiting for the browser page to finish the test."]), accent=BLUE)
-        print()
-        print(f"{INDENT}Waiting for the browser page to finish the test.")
-        print(f"{INDENT}The test must be started from the issued URL on your local PC.")
-        if current:
-            print(f"{INDENT}{diagnostics_session_url(current)}")
-            print()
-            print(f"{INDENT}Current status: {current.get('status', '-')}")
-        print()
-        time.sleep(2)
-    print_block("VPS Local PC Speed", ["Timed out waiting for the browser result."], accent=RED)
-    pause()
-
-
-def show_browser_speed_status(values: dict[str, str]) -> None:
-    session = diagnostics_current_session(values)
-    if not session:
-        print_block("VPS Local PC Speed", ["No active diagnostics session exists right now."], accent=RED)
-        pause()
-        return
-    accent = GREEN if str(session.get("status", "")) == "completed" else BLUE
-    print_block("VPS Local PC Speed", format_browser_speed_result(session), accent=accent)
+    print_block("Browser Test Link", lines, accent=GREEN)
     pause()
 
 
