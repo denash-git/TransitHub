@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+import base64
 from pathlib import Path
 import math
 import os
@@ -11,6 +12,7 @@ import shutil
 import sqlite3
 import string
 import subprocess
+import sys
 
 from transithub_runtime.env import parse_env as shared_parse_env, update_env as shared_update_env
 from transithub_runtime.tgproxy import (
@@ -128,6 +130,20 @@ def pause(message: str = "Press Enter to continue") -> None:
     read_input(f"{DIM}{message}{RESET}")
 
 
+def copy_to_clipboard(value: str) -> bool:
+    if not value or not sys.stdout.isatty():
+        return False
+    payload = base64.b64encode(value.encode("utf-8")).decode("ascii")
+    print(f"\033]52;c;{payload}\a", end="", flush=True)
+    return True
+
+
+def clipboard_notice_lines(label: str, value: str) -> list[str]:
+    if copy_to_clipboard(value):
+        return [f"{YELLOW}{label} is now in your clipboard.{RESET}"]
+    return [f"{YELLOW}Clipboard copy is not available here. Save this value now.{RESET}"]
+
+
 def bool_env(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -242,7 +258,7 @@ def credential_updated_lines(label: str, value: str) -> list[str]:
         f"{label}:",
         emphasized,
         "",
-        f"{YELLOW}Save this value now. Write it down before leaving this screen.{RESET}",
+        *clipboard_notice_lines(label, value),
     ]
 
 
@@ -342,16 +358,22 @@ def print_block(title: str, lines: list[str], accent: str = BLUE) -> None:
     print()
 
 
-def print_qr_block(title: str, link: str, accent: str = GREEN) -> None:
+def print_qr_block(title: str, link: str, accent: str = GREEN, prefix_lines: list[str] | None = None) -> None:
     if qrcode is None:
         raise RuntimeError("The qrcode runtime dependency is not installed.")
     matrix = qr_matrix(link, border=1)
     qr_lines = render_qr_halfblock_lines(matrix)
 
-    width = header_width(title, [link, "Scan this QR code in Telegram."])
+    intro_lines = prefix_lines or []
+    width = header_width(title, [*intro_lines, link, "Scan this QR code in Telegram."])
     clear_screen()
     print_header(title, width, accent=accent)
     print()
+    for line in intro_lines:
+        if line:
+            print(f"{INDENT}{line}")
+        else:
+            print()
     print(f"{INDENT}{link}")
     print()
     for rendered in qr_lines:
@@ -616,7 +638,7 @@ def show_tgproxy_qr(values: dict[str, str]) -> None:
         pause()
         return
     try:
-        print_qr_block("TGProxy QR", link, accent=GREEN)
+        print_qr_block("TGProxy QR", link, accent=GREEN, prefix_lines=[*clipboard_notice_lines("TG Proxy URL", link), ""])
     except Exception as exc:
         print_block("TGProxy QR", [str(exc)], accent=RED)
     pause()
@@ -669,15 +691,15 @@ def change_tgproxy_access_code(values: dict[str, str]) -> None:
         return
 
     refreshed = parse_env(INSTANCE_ENV_PATH)
+    link = tgproxy_url(refreshed)
     lines = [
         "TGProxy access code updated successfully.",
-        "",
         f"Access code  : {new_code}",
-        f"TG Proxy URL : {tgproxy_url(refreshed)}",
         "",
-        f"{YELLOW}Save the new TG Proxy URL now. The old secret is no longer valid.{RESET}",
+        *clipboard_notice_lines("TG Proxy URL", link),
+        "",
     ]
-    print_block("TGProxy Access Code", lines, accent=GREEN)
+    print_qr_block("TGProxy QR", link, accent=GREEN, prefix_lines=lines)
     pause()
 
 
@@ -967,7 +989,7 @@ def change_xui_panel_path(values: dict[str, str]) -> None:
         f"New panel path : /{new_path}/",
         f"Panel URL      : {panel_url(parse_env(INSTANCE_ENV_PATH), xui_db_state())}",
         "",
-        f"{YELLOW}Save the new panel URL now. The old panel path is no longer valid.{RESET}",
+        *clipboard_notice_lines("Panel URL", panel_url(parse_env(INSTANCE_ENV_PATH), xui_db_state())),
     ]
     print_block("3x-ui Panel Path", lines, accent=GREEN)
     pause()
