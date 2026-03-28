@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from .certbot import certificate_status
 from .netbird import enabled as netbird_enabled
 from .netbird import validate as validate_netbird
