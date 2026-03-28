@@ -12,8 +12,6 @@ const elements = {
   pingValue: document.getElementById('ping-value'),
   downloadValue: document.getElementById('download-value'),
   uploadValue: document.getElementById('upload-value'),
-  phaseLabel: document.getElementById('phase-label'),
-  progressText: document.getElementById('progress-text'),
   progressFill: document.getElementById('progress-fill'),
   startTest: document.getElementById('start-test'),
 };
@@ -41,9 +39,10 @@ function formatNumber(value) {
 
 function setPhase(label, percent) {
   const clamped = Math.max(0, Math.min(100, percent));
-  elements.phaseLabel.textContent = label;
-  elements.progressText.textContent = `${Math.round(clamped)}%`;
   elements.progressFill.style.width = `${clamped}%`;
+  if (!state.running && label) {
+    setStatus(label);
+  }
 }
 
 function setStatus(text) {

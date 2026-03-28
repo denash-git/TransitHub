@@ -24,55 +24,50 @@
       </svg>
     </div>
 
+    <header class="screen-topbar">
+      <div class="brand-mark">TransitHub</div>
+      <div class="expires-box">
+        <span class="expires-label">Expires URL</span>
+        <span class="expires-value"><span id="expires-seconds">--</span> s</span>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+        <span id="theme-icon" class="theme-icon" aria-hidden="true">☀</span>
+      </button>
+    </header>
+
     <section class="panel-wrap">
       <article class="speed-panel">
-        <header class="panel-topbar">
-          <div class="brand-mark">TransitHub</div>
-          <div class="expires-box">
-            <span class="expires-label">Expires URL</span>
-            <span class="expires-value"><span id="expires-seconds">--</span> s</span>
-          </div>
-          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">
-            <span id="theme-icon" class="theme-icon" aria-hidden="true">☀</span>
-          </button>
-        </header>
-
         <div class="panel-body">
           <p class="panel-kicker">Diagnostics</p>
-          <h1>PC <span>&lt;--&gt;</span> VPS speed test</h1>
           <p id="status-line" class="status-line">Ready to start HTTPS browser test.</p>
 
-          <section class="metrics-grid" aria-label="Current measurements">
-            <article class="metric-pill">
-              <span class="metric-name">Ping</span>
+          <section class="metrics-strip" aria-label="Current measurements">
+            <article class="metric-column">
               <div class="metric-reading">
                 <span id="ping-value" class="metric-value">--</span>
                 <span class="metric-unit">ms</span>
               </div>
+              <span class="metric-name">Ping</span>
             </article>
 
-            <article class="metric-pill">
-              <span class="metric-name">Download</span>
+            <article class="metric-column">
               <div class="metric-reading">
                 <span id="download-value" class="metric-value">--</span>
                 <span class="metric-unit">Mbps</span>
               </div>
+              <span class="metric-name">Download</span>
             </article>
 
-            <article class="metric-pill">
-              <span class="metric-name">Upload</span>
+            <article class="metric-column">
               <div class="metric-reading">
                 <span id="upload-value" class="metric-value">--</span>
                 <span class="metric-unit">Mbps</span>
               </div>
+              <span class="metric-name">Upload</span>
             </article>
           </section>
 
           <section class="progress-block" aria-label="Run progress">
-            <div class="progress-meta">
-              <span id="phase-label" class="phase-label">Waiting for start</span>
-              <span id="progress-text" class="progress-text">0%</span>
-            </div>
             <div class="progress-track">
               <span id="progress-fill" class="progress-fill"></span>
             </div>
