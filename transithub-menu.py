@@ -109,14 +109,23 @@ def clear_screen() -> None:
     print("\033c", end="")
 
 
+def read_input(prompt_text: str) -> str:
+    try:
+        return input(prompt_text)
+    except EOFError:
+        print()
+        print("Input stream is not interactive. Run `menu` in a TTY session.")
+        raise SystemExit(0)
+
+
 def prompt(label: str) -> str:
     print()
-    return input(f"{YELLOW}{label}:{RESET} ").strip()
+    return read_input(f"{YELLOW}{label}:{RESET} ").strip()
 
 
 def pause(message: str = "Press Enter to continue") -> None:
     print()
-    input(f"{DIM}{message}{RESET}")
+    read_input(f"{DIM}{message}{RESET}")
 
 
 def bool_env(value: str | None) -> bool:
@@ -165,7 +174,7 @@ def prompt_fixed_length_value(
         if error:
             lines.extend([f"{RED}{error}{RESET}", ""])
         print_block(title, lines, accent=accent)
-        entered = input(f"{label} [{default}]: ").strip()
+        entered = read_input(f"{label} [{default}]: ").strip()
         if not entered:
             return default
         if len(entered) == length:
@@ -186,7 +195,7 @@ def prompt_panel_path_value(current: str) -> str:
         if error:
             lines.extend([f"{RED}{error}{RESET}", ""])
         print_block("3x-ui Panel Path", lines, accent=YELLOW)
-        entered = input(f"New panel path [{default}]: ").strip()
+        entered = read_input(f"New panel path [{default}]: ").strip()
         if not entered:
             return default
         if len(entered) != len(default):
@@ -211,7 +220,7 @@ def prompt_tgproxy_access_code(current_code: str) -> str:
         if error:
             lines.extend([f"{RED}{error}{RESET}", ""])
         print_block("TGProxy Access Code", lines, accent=GREEN)
-        entered = input(f"New access code [{default}]: ").strip().lower()
+        entered = read_input(f"New access code [{default}]: ").strip().lower()
         if not entered:
             return default
         if len(entered) != TGPROXY_CODE_LENGTH:
@@ -516,11 +525,11 @@ def netbird_menu() -> None:
             f"Hostname         : {values.get('NETBIRD_HOSTNAME', '') or '-'}",
             "",
             "1. Show NetBird status",
-            "2. Show NetBird logs",
+            "2. Show logs",
             "3. Reconfigure setup key / management URL",
-            "4. Start NetBird",
-            "5. Stop NetBird",
-            "6. Restart NetBird",
+            "4. Start",
+            "5. Stop",
+            "6. Restart",
             "7. Disable NetBird",
             "0. Back",
         ]
@@ -576,10 +585,10 @@ def tgproxy_menu() -> None:
             "",
             "1. Show TGProxy QR code",
             "2. Change access code",
-            "3. Show TGProxy logs",
-            "4. Start TGProxy",
-            "5. Stop TGProxy",
-            "6. Restart TGProxy",
+            "3. Show logs",
+            "4. Start",
+            "5. Stop",
+            "6. Restart",
             "0. Back",
         ]
         print_block("TGProxy", lines, accent=GREEN)
@@ -699,11 +708,11 @@ def reconfigure_netbird(values: dict[str, str]) -> None:
     current_key = values.get("NETBIRD_SETUP_KEY", "").strip()
     current_url = values.get("NETBIRD_MANAGEMENT_URL", "").strip()
     print(f"{YELLOW}Enter '-' as setup key to disable NetBird.{RESET}\n")
-    new_key = input(f"NetBird setup key [{current_key or 'disabled'}]: ").strip()
+    new_key = read_input(f"NetBird setup key [{current_key or 'disabled'}]: ").strip()
     if new_key == "-":
         disable_netbird(values)
         return
-    new_url = input(f"NetBird management URL [{current_url or 'https://'}]: ").strip()
+    new_url = read_input(f"NetBird management URL [{current_url or 'https://'}]: ").strip()
 
     effective_key = new_key or current_key
     effective_url = new_url or current_url
@@ -764,11 +773,11 @@ def xui_menu() -> None:
             "2. Change username",
             "3. Change password",
             "4. Change panel path",
-            "5. Show x-ui logs",
-            "6. Start x-ui",
-            "7. Stop x-ui",
-            "8. Restart x-ui",
-            "9. Open x-ui shell",
+            "5. Show logs",
+            "6. Start",
+            "7. Stop",
+            "8. Restart",
+            "9. Open shell",
             "0. Back",
         ]
         print_block("3x-ui", lines, accent=YELLOW)
@@ -1211,7 +1220,7 @@ def run_certificate_renew_now() -> None:
 def force_reissue_certificate(values: dict[str, str]) -> None:
     clear_screen()
     print(f"{RED}Force reissue requests a brand new certificate and may hit Let's Encrypt rate limits.{RESET}\n")
-    confirm = input("Continue with force reissue? [y/N]: ").strip().lower()
+    confirm = read_input("Continue with force reissue? [y/N]: ").strip().lower()
     if confirm not in {"y", "yes"}:
         print_block("TLS Certificate", ["Force reissue cancelled."], accent=RED)
         pause()
@@ -1370,7 +1379,7 @@ def change_timezone(values: dict[str, str]) -> None:
     print("Examples: UTC, Europe/Moscow, America/New_York, Asia/Almaty")
     print("Full list: timedatectl list-timezones")
     print()
-    new_timezone = input(f"New timezone [{current or 'Europe/Moscow'}]: ").strip()
+    new_timezone = read_input(f"New timezone [{current or 'Europe/Moscow'}]: ").strip()
     if not new_timezone:
         print_block("Time Settings", ["Timezone was not changed."], accent=RED)
         pause()
