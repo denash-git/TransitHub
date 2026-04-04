@@ -20,6 +20,7 @@ BUNDLE_SCHEMA_VERSION = "1"
 BUNDLE_SUFFIX = ".tar.gz"
 BACKUP_DIR = paths.BACKUP_DIR
 RESTORE_INBOX_DIR = BACKUP_DIR
+ROLLBACK_PREFIX = "backup-rollback-"
 PAYLOAD_PREFIX = Path("payload") / "project"
 
 PROJECT_FILE_PATHS = [
@@ -145,9 +146,20 @@ def restore_bundle(bundle_path: Path | None = None) -> dict[str, object]:
 
 def latest_restore_bundle() -> Path:
     RESTORE_INBOX_DIR.mkdir(parents=True, exist_ok=True)
-    candidates = sorted(RESTORE_INBOX_DIR.glob(f"*{BUNDLE_SUFFIX}"), key=lambda item: item.stat().st_mtime, reverse=True)
+    candidates = sorted(
+        (
+            item
+            for item in RESTORE_INBOX_DIR.glob(f"backup-*{BUNDLE_SUFFIX}")
+            if item.is_file() and not item.name.startswith(ROLLBACK_PREFIX)
+        ),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
     if not candidates:
-        raise BackupError(f"No bundle was found in {RESTORE_INBOX_DIR}")
+        raise BackupError(
+            f"No restorable backup bundle was found in {RESTORE_INBOX_DIR}. "
+            f"Expected files like backup-YYYYMMDD-HHMMSS{BUNDLE_SUFFIX}."
+        )
     return candidates[0]
 
 

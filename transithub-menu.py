@@ -1234,7 +1234,8 @@ def create_backup_bundle_action() -> None:
         f"Files in payload  : {len(verify_summary.project_files)}",
         "",
         f"Backup directory  : {RUNTIME_BACKUP_DIR}",
-        "Restore uses the newest *.tar.gz file from this same directory.",
+        "Restore uses the newest backup-*.tar.gz file from this same directory.",
+        "Automatic backup-rollback-*.tar.gz files are excluded from restore selection.",
     ]
     print_block("Backup Bundle", lines, accent=GREEN)
     pause()
@@ -1250,7 +1251,8 @@ def restore_backup_bundle_action() -> None:
                 str(exc),
                 "",
                 f"Place the bundle file into: {RUNTIME_RESTORE_INBOX_DIR}",
-                "Restore will use the newest *.tar.gz file from this directory.",
+                "Restore will use the newest backup-*.tar.gz file from this directory.",
+                "Automatic backup-rollback-*.tar.gz files are excluded.",
             ],
             accent=RED,
         )
