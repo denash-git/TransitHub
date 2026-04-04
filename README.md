@@ -36,6 +36,8 @@ bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/main/b
 bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh")
 ```
 
+If you use the direct branch URL, you do not need to set `TRANSITHUB_BRANCH` separately.
+
 Non-interactive dev example with NetBird enabled:
 
 ```bash

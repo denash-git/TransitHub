@@ -2,20 +2,9 @@
 set -euo pipefail
 
 REPO_URL="${TRANSITHUB_REPO_URL:-https://github.com/denash-git/TransitHub.git}"
-BRANCH="${TRANSITHUB_BRANCH:-}"
+BRANCH="${TRANSITHUB_BRANCH:-dev}"
 RAW_BOOTSTRAP_URL="${TRANSITHUB_BOOTSTRAP_URL:-https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh}"
 TARGET_USER="${SUDO_USER:-${USER:-root}}"
-
-ensure_branch_selected() {
-  if [[ -n "$BRANCH" ]]; then
-    return
-  fi
-
-  printf 'TRANSITHUB_BRANCH is required.\n' >&2
-  printf 'Example for dev : TRANSITHUB_BRANCH=dev bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/dev/bootstrap.sh")\n' >&2
-  printf 'Example for main: TRANSITHUB_BRANCH=main bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh")\n' >&2
-  exit 1
-}
 
 resolve_home_dir() {
   local target_user="$1"
@@ -150,7 +139,6 @@ prepare_checkout() {
 }
 
 main() {
-  ensure_branch_selected
   ensure_root
   ensure_apt
   ensure_git
