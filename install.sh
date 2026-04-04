@@ -14,6 +14,7 @@ GREEN=$'\033[1;32m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
 FRAME_WIDTH=60
+INSTALL_BRANCH="${TRANSITHUB_BRANCH:-dev}"
 
 repeat_char() {
   local char="$1"
@@ -142,7 +143,7 @@ run_interactive_install() {
   local enable_netbird
   local -a install_args
 
-  frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
+  frame 'TransitHub v2 Install Menu' "Branch: ${INSTALL_BRANCH}"
   instance_name="$(hostname -s)"
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"

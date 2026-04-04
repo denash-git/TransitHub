@@ -66,6 +66,7 @@ GREEN = "\033[1;32m"
 RED = "\033[1;31m"
 RESET = "\033[0m"
 CURRENT_STEP_TITLE = "Install startup"
+INSTALL_BRANCH = os.environ.get("TRANSITHUB_BRANCH", "dev").strip() or "dev"
 
 
 class InstallerError(RuntimeError):
@@ -102,7 +103,7 @@ def run_install() -> int:
     overrides = parse_key_value(args.set)
     state = read_state()
 
-    banner("TransitHub v2 Installer", "Clean host deploy with local service directories")
+    banner("TransitHub v2 Installer", f"Branch: {INSTALL_BRANCH}")
     enforce_installed_lockout(state)
     mode = determine_install_mode(args.mode, state)
     note(f"Selected mode: {mode}")
