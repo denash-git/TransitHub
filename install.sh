@@ -140,7 +140,7 @@ detect_tz() {
 run_interactive_install() {
   local tz domain reality_domain tgproxy_public_host fake_site instance_name tgproxy_state
   local netbird_setup_key netbird_management_url netbird_state
-  local enable_netbird
+  local enable_netbird enable_tgproxy
   local -a install_args
 
   frame 'TransitHub v2 Install Menu' "Branch: ${INSTALL_BRANCH}"
@@ -148,12 +148,17 @@ run_interactive_install() {
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
   printf '\n' > /dev/tty
-  printf '%b%s%b [tg.%s]: ' "$BOLD" 'Telegram proxy domain' "$RESET" "$domain" > /dev/tty
-  IFS= read -r tgproxy_public_host < /dev/tty
-  if [[ -z "$tgproxy_public_host" ]]; then
-    tgproxy_public_host="tg.${domain}"
-  elif [[ "$tgproxy_public_host" == "-" ]]; then
-    tgproxy_public_host=""
+  enable_tgproxy="$(prompt_yes_no 'Enable Telegram proxy' 'n')"
+  tgproxy_public_host=""
+  if [[ "$enable_tgproxy" == "true" ]]; then
+    printf '\n' > /dev/tty
+    printf '%b%s%b [tg.%s]: ' "$BOLD" 'Telegram proxy domain' "$RESET" "$domain" > /dev/tty
+    IFS= read -r tgproxy_public_host < /dev/tty
+    if [[ -z "$tgproxy_public_host" ]]; then
+      tgproxy_public_host="tg.${domain}"
+    elif [[ "$tgproxy_public_host" == "-" ]]; then
+      tgproxy_public_host=""
+    fi
   fi
   printf '\n' > /dev/tty
   enable_netbird="$(prompt_yes_no 'Enable NetBird' 'n')"
@@ -278,6 +283,9 @@ run_noninteractive_install() {
   else
     printf '  netbird   : disabled\n'
     printf '              set TRANSITHUB_NETBIRD_SETUP_KEY and TRANSITHUB_NETBIRD_MANAGEMENT_URL to enable it\n'
+  fi
+  if [[ -z "$tgproxy_public_host" ]]; then
+    printf '              set TRANSITHUB_TGPROXY_PUBLIC_HOST to enable Telegram proxy in non-interactive mode\n'
   fi
   printf '  timezone  : %s\n' "$tz"
   printf '  fake site : %s\n' "$fake_site"

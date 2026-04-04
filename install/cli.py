@@ -898,17 +898,12 @@ def warn(message: str) -> None:
 
 def print_summary(values: dict[str, str]) -> None:
     panel_url = f"https://{values['DOMAIN']}/{values['PANEL_PATH']}/"
-    sub_url = f"https://{values['DOMAIN']}/{values['SUB_PATH']}/first"
-    json_url = f"https://{values['DOMAIN']}/{values['JSON_PATH']}/first"
     staging = values.get("CERTBOT_STAGING", "false").strip().lower() == "true"
     cert = certificate_status(values["DOMAIN"], staging=staging)
     lines = [
         f"Panel URL    : {panel_url}",
         f"Username     : {values['CONFIG_USERNAME']}",
-        f"Password     : {values['CONFIG_PASSWORD']}",
-        f"Sub URL      : {sub_url}",
-        f"JSON Sub URL : {json_url}",
-        f"Fake site    : {values['FAKE_SITE_TEMPLATE']}",
+        "Password     : not shown. Reset it from the x-ui menu if needed.",
     ]
     if cert["present"]:
         if cert["expires_at"]:
@@ -923,8 +918,6 @@ def print_summary(values: dict[str, str]) -> None:
         lines.append("TLS Mode     : Let's Encrypt staging")
     if tgproxy_enabled(values):
         lines.append(f"TG Proxy URL : {tgproxy_tg_link(values)}")
-        lines.append(f"TG Domain    : {values['TGPROXY_PUBLIC_HOST']}")
-        lines.append(f"FakeTLS SNI  : {values['TGPROXY_FAKETLS_DOMAIN']}")
     if netbird_enabled(values):
         lines.append(f"NetBird URL  : {values['NETBIRD_MANAGEMENT_URL']}")
         lines.append(f"NetBird Peer : {values['NETBIRD_HOSTNAME']}")

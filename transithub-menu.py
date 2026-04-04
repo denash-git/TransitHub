@@ -36,6 +36,7 @@ from runtime.tgproxy import (
     faketls_domain as shared_tgproxy_faketls_domain,
     public_host as shared_tgproxy_public_host,
     split_secret as shared_split_tgproxy_secret,
+    tg_link as shared_tgproxy_tg_link,
 )
 from runtime.xui_db import (
     update_xui_db_credentials as shared_update_xui_db_credentials,
@@ -1275,21 +1276,32 @@ def restore_backup_bundle_action() -> None:
         pause()
         return
 
+    restored_values = parse_env(INSTANCE_ENV_PATH)
     lines = [
         "Restore bundle completed successfully.",
         "",
         f"Bundle used       : {result.get('bundle_path', '-')}",
         f"Rollback bundle   : {result.get('rollback_path', '-')}",
         f"Domain            : {result.get('domain', '-') or '-'}",
-        f"TGProxy host      : {result.get('tgproxy_public_host', '-') or '-'}",
         f"Files restored    : {result.get('project_files_restored', '-')}",
         f"Bundle schema     : {verify_summary.manifest.get('schema_version', '-')}",
         "",
-        "Compose status:",
-        *result.get("service_lines", []),
+        *connection_summary_lines(restored_values),
     ]
     print_block("Restore Bundle", lines, accent=GREEN)
     pause()
+
+
+def connection_summary_lines(values: dict[str, str]) -> list[str]:
+    lines = [
+        "Connection details:",
+        f"Panel URL        : https://{values['DOMAIN']}/{values['PANEL_PATH']}/",
+        f"Username         : {values['CONFIG_USERNAME']}",
+        "Panel password   : not shown. Reset it from the x-ui menu if needed.",
+    ]
+    if shared_tgproxy_enabled(values):
+        lines.append(f"TG Proxy URL     : {shared_tgproxy_tg_link(values)}")
+    return lines
 
 
 def show_compose_status(values: dict[str, str]) -> None:

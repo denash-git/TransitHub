@@ -12,9 +12,8 @@ import tarfile
 import tempfile
 
 from . import paths
-from .env import parse_env, render_env
+from .env import parse_env
 from .tgproxy import enabled as tgproxy_enabled
-from .xui_db import seed_xui_db
 
 
 BUNDLE_SCHEMA_VERSION = "1"
@@ -125,14 +124,11 @@ def restore_bundle(bundle_path: Path | None = None) -> dict[str, object]:
 
         stop_project_containers(current_values)
         restore_payload_tree(extracted_root / PAYLOAD_PREFIX)
-
-        restored_values = parse_env(paths.INSTANCE_ENV_PATH)
-        seeded = seed_xui_db(restored_values, db_path=XUI_DB_PATH)
-        paths.INSTANCE_ENV_PATH.write_text(render_env(seeded.get("updated_values", restored_values)), encoding="utf-8")
+        if not XUI_DB_PATH.exists():
+            raise BackupError(f"Restored x-ui.db was not found after restore: {XUI_DB_PATH}")
 
         final_values = parse_env(paths.INSTANCE_ENV_PATH)
         compose_up(final_values)
-        service_lines = compose_ps(final_values)
 
     return {
         "bundle_path": str(target_bundle),
@@ -140,7 +136,10 @@ def restore_bundle(bundle_path: Path | None = None) -> dict[str, object]:
         "domain": final_values.get("DOMAIN", ""),
         "tgproxy_public_host": final_values.get("TGPROXY_PUBLIC_HOST", ""),
         "project_files_restored": len(summary.project_files),
-        "service_lines": service_lines,
+        "panel_path": final_values.get("PANEL_PATH", ""),
+        "config_username": final_values.get("CONFIG_USERNAME", ""),
+        "tgproxy_enabled": final_values.get("ENABLE_TGPROXY", ""),
+        "tgproxy_secret": final_values.get("TGPROXY_SECRET", ""),
     }
 
 
