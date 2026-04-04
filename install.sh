@@ -80,18 +80,11 @@ prompt_default() {
 
 prompt_yes_no() {
   local label="$1"
-  local default_answer="${2:-n}"
-  local prompt_suffix='y/N'
   local value
 
-  if [[ "$default_answer" == "y" || "$default_answer" == "Y" ]]; then
-    prompt_suffix='Y/n'
-  fi
-
   while true; do
-    printf '%b%s%b [%s]: ' "$BOLD" "$label" "$RESET" "$prompt_suffix" > /dev/tty
+    printf '%b%s%b [y/n]: ' "$BOLD" "$label" "$RESET" > /dev/tty
     IFS= read -r value < /dev/tty
-    value="${value:-$default_answer}"
     case "${value,,}" in
       y|yes)
         printf 'true'
@@ -102,7 +95,7 @@ prompt_yes_no() {
         return
         ;;
     esac
-    printf '\nPlease answer y or n.\n\n' > /dev/tty
+    printf '\nPlease answer explicitly with y or n.\n\n' > /dev/tty
   done
 }
 
@@ -148,7 +141,7 @@ run_interactive_install() {
   domain="$(prompt_default 'Main domain' 'example.com' 'To accept the suggested value just press Enter.')"
   reality_domain="$(prompt_default 'REALITY domain' "real.${domain}")"
   printf '\n' > /dev/tty
-  enable_tgproxy="$(prompt_yes_no 'Enable Telegram proxy' 'n')"
+  enable_tgproxy="$(prompt_yes_no 'Enable Telegram proxy')"
   tgproxy_public_host=""
   if [[ "$enable_tgproxy" == "true" ]]; then
     printf '\n' > /dev/tty
@@ -161,7 +154,7 @@ run_interactive_install() {
     fi
   fi
   printf '\n' > /dev/tty
-  enable_netbird="$(prompt_yes_no 'Enable NetBird' 'n')"
+  enable_netbird="$(prompt_yes_no 'Enable NetBird')"
   netbird_setup_key=""
   if [[ "$enable_netbird" == "true" ]]; then
     printf '\n' > /dev/tty

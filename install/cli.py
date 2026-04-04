@@ -903,7 +903,7 @@ def print_summary(values: dict[str, str]) -> None:
     lines = [
         f"Panel URL    : {panel_url}",
         f"Username     : {values['CONFIG_USERNAME']}",
-        "Password     : not shown. Reset it from the x-ui menu if needed.",
+        f"Password     : {values['CONFIG_PASSWORD']}",
     ]
     if cert["present"]:
         if cert["expires_at"]:
