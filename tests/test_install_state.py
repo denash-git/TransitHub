@@ -6,15 +6,15 @@ from unittest import mock
 from pathlib import Path
 
 from install.cli import InstallerError, determine_install_mode, enforce_installed_lockout
-from transithub_runtime.install_state import begin_install
-from transithub_runtime.install_state import mark_failed
-from transithub_runtime.install_state import mark_installed
-from transithub_runtime.install_state import mark_step
-from transithub_runtime.install_state import read_state
-from transithub_runtime.install_state import STATUS_FAILED
-from transithub_runtime.install_state import STATUS_FRESH
-from transithub_runtime.install_state import STATUS_IN_PROGRESS
-from transithub_runtime.install_state import STATUS_INSTALLED
+from runtime.install_state import begin_install
+from runtime.install_state import mark_failed
+from runtime.install_state import mark_installed
+from runtime.install_state import mark_step
+from runtime.install_state import read_state
+from runtime.install_state import STATUS_FAILED
+from runtime.install_state import STATUS_FRESH
+from runtime.install_state import STATUS_IN_PROGRESS
+from runtime.install_state import STATUS_INSTALLED
 
 
 class InstallStateTests(unittest.TestCase):

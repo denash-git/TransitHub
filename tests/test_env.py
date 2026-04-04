@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from transithub_runtime.env import defaults, ensure_generated, parse_env, update_env
+from runtime.env import defaults, ensure_generated, parse_env, update_env
 
 
 class EnvTests(unittest.TestCase):

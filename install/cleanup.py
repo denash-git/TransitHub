@@ -6,7 +6,7 @@ import shutil
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LEGACY_DIRS = [
-    PROJECT_ROOT / "runtime",
+    PROJECT_ROOT / "transithub_runtime",
     PROJECT_ROOT / "deploy",
     PROJECT_ROOT / "reverse-proxy",
     PROJECT_ROOT / "__pycache__",
@@ -24,7 +24,7 @@ REQUIRED_FILES = [
     PROJECT_ROOT / "netbird" / "docker-compose.yml",
     PROJECT_ROOT / "netbird" / "entrypoint.sh",
     PROJECT_ROOT / "diagnostics" / "docker-compose.yml",
-    PROJECT_ROOT / "transithub_runtime" / "__init__.py",
+    PROJECT_ROOT / "runtime" / "__init__.py",
     PROJECT_ROOT / "transithub-menu.py",
     PROJECT_ROOT / "instance.env",
 ]

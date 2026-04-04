@@ -22,15 +22,15 @@ from .netbird import enabled as netbird_enabled
 from .tgproxy import enabled as tgproxy_enabled
 from .tgproxy import tg_link as tgproxy_tg_link
 from . import paths
-from transithub_runtime.install_state import begin_install
-from transithub_runtime.install_state import mark_failed
-from transithub_runtime.install_state import mark_installed
-from transithub_runtime.install_state import mark_step
-from transithub_runtime.install_state import read_state
-from transithub_runtime.install_state import STATUS_FAILED
-from transithub_runtime.install_state import STATUS_FRESH
-from transithub_runtime.install_state import STATUS_IN_PROGRESS
-from transithub_runtime.install_state import STATUS_INSTALLED
+from runtime.install_state import begin_install
+from runtime.install_state import mark_failed
+from runtime.install_state import mark_installed
+from runtime.install_state import mark_step
+from runtime.install_state import read_state
+from runtime.install_state import STATUS_FAILED
+from runtime.install_state import STATUS_FRESH
+from runtime.install_state import STATUS_IN_PROGRESS
+from runtime.install_state import STATUS_INSTALLED
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = PROJECT_ROOT / ".venv"

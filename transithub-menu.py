@@ -20,8 +20,8 @@ from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
-from transithub_runtime.env import parse_env as shared_parse_env, update_env as shared_update_env
-from transithub_runtime.backup import (
+from runtime.env import parse_env as shared_parse_env, update_env as shared_update_env
+from runtime.backup import (
     BACKUP_DIR as RUNTIME_BACKUP_DIR,
     RESTORE_INBOX_DIR as RUNTIME_RESTORE_INBOX_DIR,
     BackupError,
@@ -30,14 +30,14 @@ from transithub_runtime.backup import (
     restore_bundle as runtime_restore_bundle,
     verify_bundle as runtime_verify_bundle,
 )
-from transithub_runtime.tgproxy import (
+from runtime.tgproxy import (
     build_secret as shared_build_tgproxy_secret,
     enabled as shared_tgproxy_enabled,
     faketls_domain as shared_tgproxy_faketls_domain,
     public_host as shared_tgproxy_public_host,
     split_secret as shared_split_tgproxy_secret,
 )
-from transithub_runtime.xui_db import (
+from runtime.xui_db import (
     update_xui_db_credentials as shared_update_xui_db_credentials,
     upsert_xui_setting as shared_upsert_xui_setting,
     xui_user_record as shared_xui_user_record,

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from transithub_runtime.xui_db import seed_xui_db
+from runtime.xui_db import seed_xui_db
 
 
 def create_schema(path: Path) -> None:

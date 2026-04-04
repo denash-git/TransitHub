@@ -5,27 +5,284 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Northstar Cloud</title>
   <style>
+    :root {
+      --bg: #081120;
+      --surface: rgba(10, 22, 39, 0.84);
+      --surface-alt: rgba(18, 39, 66, 0.86);
+      --text: #f5f9ff;
+      --muted: rgba(245, 249, 255, 0.76);
+      --line: rgba(147, 189, 255, 0.18);
+      --accent: #7db6ff;
+      --accent-2: #7df0d1;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: Verdana, sans-serif;
-      color: #f8fbff;
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, sans-serif;
       background:
-        radial-gradient(circle at 80% 0%, rgba(85,171,255,0.35), transparent 28%),
-        linear-gradient(180deg, #12233b 0%, #0a111c 100%);
+        radial-gradient(circle at 78% 6%, rgba(96, 166, 255, 0.35), transparent 20rem),
+        radial-gradient(circle at 12% 20%, rgba(125, 240, 209, 0.12), transparent 18rem),
+        linear-gradient(180deg, #0d1c31 0%, var(--bg) 72%);
     }
-    .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 80px 24px;
+    a { color: inherit; text-decoration: none; }
+    .shell { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: rgba(8, 17, 32, 0.8);
+      border-bottom: 1px solid var(--line);
     }
-    h1 { font-size: clamp(40px, 8vw, 90px); margin: 0 0 18px; }
-    p { max-width: 580px; line-height: 1.7; color: rgba(248,251,255,0.78); }
+    .topbar-inner,
+    .footer,
+    .footer-box {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      padding: 18px 0;
+    }
+    .brand {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .brand span { color: var(--accent-2); }
+    .nav, .footer-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.8fr);
+      gap: 24px;
+      align-items: center;
+      padding: 76px 0 26px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(125, 182, 255, 0.08);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 18px 0 16px;
+      font-size: clamp(42px, 7vw, 82px);
+      line-height: 0.96;
+    }
+    .lead {
+      max-width: 640px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.75;
+      margin: 0 0 26px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 46px;
+      padding: 0 18px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.04);
+      box-shadow: var(--shadow);
+      font-size: 14px;
+    }
+    .button.primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      border-color: transparent;
+      color: #07111f;
+      font-weight: 700;
+    }
+    .panel, .card, .footer-box {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+    .panel { padding: 22px; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .metric {
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--surface-alt);
+    }
+    .metric strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 24px;
+      color: var(--accent-2);
+    }
+    section { padding: 24px 0; }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 40px);
+    }
+    .section-head p,
+    .card p,
+    .footer-box p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .card { padding: 20px; }
+    .card h3 {
+      margin: 0 0 12px;
+      font-size: 21px;
+    }
+    .split {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+    .list {
+      margin: 14px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+    .footer-wrap { padding: 26px 0 60px; }
+    @media (max-width: 860px) {
+      .hero, .grid, .split { grid-template-columns: 1fr; }
+      .topbar-inner, .section-head, .footer-box, .footer { display: block; }
+      .nav, .footer-nav { margin-top: 14px; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Northstar Cloud</h1>
-    <p>Distributed edge hosting with practical observability, private ingress shaping and fast regional rollouts.</p>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="#top">Northstar <span>Cloud</span></a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#platform">Platform</a>
+        <a href="#regions">Regions</a>
+        <a href="#support">Support</a>
+        <a href="#footer">Contacts</a>
+      </nav>
+    </div>
+  </header>
+  <main id="top" class="shell">
+    <section class="hero">
+      <div>
+        <span class="tag">Distributed hosting and service continuity</span>
+        <h1>Regional edge hosting with sensible operational guardrails.</h1>
+        <p class="lead">
+          Northstar Cloud helps compact digital teams keep public delivery surfaces stable,
+          monitor service continuity, and roll changes out in controlled windows.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="#platform">Explore platform</a>
+          <a class="button" href="#support">Support model</a>
+        </div>
+      </div>
+      <aside class="panel">
+        <strong>Availability overview</strong>
+        <p>Regional service plans are maintained around scheduled validation windows and low-noise public change surfaces.</p>
+        <div class="metrics">
+          <div class="metric"><strong>8</strong>regional lanes</div>
+          <div class="metric"><strong>24/7</strong>health checks</div>
+          <div class="metric"><strong>15 min</strong>status cadence</div>
+          <div class="metric"><strong>2-step</strong>rollout review</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="platform">
+      <div class="section-head">
+        <h2>Platform</h2>
+        <p>Public content is intentionally concise, but structured enough to read like a maintained cloud services property.</p>
+      </div>
+      <div class="grid">
+        <article class="card">
+          <h3>Edge ingress</h3>
+          <p>Managed ingress surfaces designed for stable certificate handling, controlled exposure, and predictable maintenance timing.</p>
+        </article>
+        <article class="card">
+          <h3>Service continuity</h3>
+          <p>Fallback-aware delivery patterns for teams that need public uptime without a large platform footprint.</p>
+        </article>
+        <article class="card">
+          <h3>Visibility</h3>
+          <p>Light observability, status review, and post-change validation notes suitable for small operators.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="regions">
+      <div class="section-head">
+        <h2>Regional model</h2>
+        <p>We publish region-level status language rather than infrastructure specifics, which keeps the surface credible and restrained.</p>
+      </div>
+      <div class="split">
+        <article class="card">
+          <h3>Coverage notes</h3>
+          <ul class="list">
+            <li>Western and central lanes updated on standard review cadence</li>
+            <li>Archive mirror policies refreshed monthly</li>
+            <li>Traffic-heavy changes are staged during limited windows</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Current notice</h3>
+          <p>Platform-side review windows remain open for existing tenants. Planned maintenance notices are posted ahead of certificate and routing changes.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="support">
+      <div class="section-head">
+        <h2>Support model</h2>
+        <p>Inbound requests are handled through scheduled review blocks, with public pages limited to high-level availability notes and maintenance guidance.</p>
+      </div>
+      <div class="card">
+        <p>Northstar works best for teams that need a steady public surface, compact support notes, and low drama around routine service changes.</p>
+      </div>
+    </section>
+  </main>
+  <div id="footer" class="footer-wrap shell">
+    <div class="footer-box">
+      <div>
+        <strong>Northstar Cloud</strong>
+        <p>Regional hosting and delivery continuity for teams that want a steady public surface with modest operational overhead.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="#top">Top</a>
+        <a href="#platform">Platform</a>
+        <a href="#regions">Regions</a>
+        <a href="#support">Support</a>
+      </nav>
+    </div>
   </div>
 </body>
 </html>
