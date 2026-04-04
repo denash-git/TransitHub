@@ -1232,8 +1232,8 @@ def create_backup_bundle_action() -> None:
         f"TGProxy host      : {verify_summary.manifest.get('tgproxy_public_host', '-') or '-'}",
         f"Files in payload  : {len(verify_summary.project_files)}",
         "",
-        f"To restore later, place a bundle into {RUNTIME_RESTORE_INBOX_DIR}",
-        "Restore uses the newest *.thbundle.tar.gz file from that directory.",
+        f"Backup directory  : {RUNTIME_BACKUP_DIR}",
+        "Restore uses the newest *.tar.gz file from this same directory.",
     ]
     print_block("Backup Bundle", lines, accent=GREEN)
     pause()
@@ -1248,8 +1248,8 @@ def restore_backup_bundle_action() -> None:
             [
                 str(exc),
                 "",
-                f"Place exactly the bundle file into: {RUNTIME_RESTORE_INBOX_DIR}",
-                "Restore will use the newest *.thbundle.tar.gz file from that directory.",
+                f"Place the bundle file into: {RUNTIME_RESTORE_INBOX_DIR}",
+                "Restore will use the newest *.tar.gz file from this directory.",
             ],
             accent=RED,
         )
@@ -1260,7 +1260,7 @@ def restore_backup_bundle_action() -> None:
         "Restore Bundle",
         [
             f"Bundle file       : {bundle_path}",
-            f"Restore inbox     : {RUNTIME_RESTORE_INBOX_DIR}",
+            f"Backup directory  : {RUNTIME_RESTORE_INBOX_DIR}",
             "",
             "Verifying bundle, creating rollback snapshot,",
             "restoring runtime state, and restarting services...",

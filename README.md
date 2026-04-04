@@ -101,6 +101,12 @@ x-ui
 menu
 ```
 
+- в `Services` доступны:
+  `Backup Bundle` и `Restore Bundle`
+- backup bundle сохраняется в `~/TransitHub/backup`
+- restore берёт самый новый `backup-*.tar.gz` из той же папки и перед
+  восстановлением автоматически создаёт `backup-rollback-*.tar.gz`
+
 Если launcher ещё не установлен или нужно запустить файл напрямую:
 
 ```bash

@@ -18,9 +18,9 @@ from .xui_db import seed_xui_db
 
 
 BUNDLE_SCHEMA_VERSION = "1"
-BUNDLE_SUFFIX = ".thbundle.tar.gz"
-BACKUP_DIR = Path("/root/transithub-backups")
-RESTORE_INBOX_DIR = Path("/root/transithub-restore")
+BUNDLE_SUFFIX = ".tar.gz"
+BACKUP_DIR = paths.BACKUP_DIR
+RESTORE_INBOX_DIR = BACKUP_DIR
 PAYLOAD_PREFIX = Path("payload") / "project"
 
 PROJECT_FILE_PATHS = [
@@ -121,7 +121,7 @@ def restore_bundle(bundle_path: Path | None = None) -> dict[str, object]:
         safe_extract_bundle(target_bundle, extracted_root)
         bundle_values = parse_env(extracted_root / PAYLOAD_PREFIX / "instance.env")
         enforce_same_instance(current_values, bundle_values)
-        rollback = backup_bundle(BACKUP_DIR, label="rollback-before-restore")
+        rollback = backup_bundle(BACKUP_DIR, label="backup-rollback")
 
         stop_project_containers(current_values)
         restore_payload_tree(extracted_root / PAYLOAD_PREFIX)
@@ -155,7 +155,7 @@ def latest_restore_bundle() -> Path:
 def bundle_name(label: str) -> str:
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
     safe_label = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in label).strip("-") or "backup"
-    return f"transithub-{safe_label}-{timestamp}{BUNDLE_SUFFIX}"
+    return f"{safe_label}-{timestamp}{BUNDLE_SUFFIX}"
 
 
 def ensure_runtime_files_exist() -> None:
