@@ -26,6 +26,16 @@ BRANCH="${TRANSITHUB_BRANCH:-main}"
 bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
+Non-interactive example with NetBird enabled:
+
+```bash
+TRANSITHUB_BRANCH=dev \
+TRANSITHUB_DOMAIN=example.com \
+TRANSITHUB_NETBIRD_SETUP_KEY=nb-setup-key \
+TRANSITHUB_NETBIRD_MANAGEMENT_URL=https://management.example.com \
+bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/dev/bootstrap.sh")
+```
+
 Или обычным clone-сценарием:
 
 ```bash

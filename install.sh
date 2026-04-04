@@ -77,6 +77,34 @@ prompt_default() {
   printf '%s' "$value"
 }
 
+prompt_yes_no() {
+  local label="$1"
+  local default_answer="${2:-n}"
+  local prompt_suffix='y/N'
+  local value
+
+  if [[ "$default_answer" == "y" || "$default_answer" == "Y" ]]; then
+    prompt_suffix='Y/n'
+  fi
+
+  while true; do
+    printf '%b%s%b [%s]: ' "$BOLD" "$label" "$RESET" "$prompt_suffix" > /dev/tty
+    IFS= read -r value < /dev/tty
+    value="${value:-$default_answer}"
+    case "${value,,}" in
+      y|yes)
+        printf 'true'
+        return
+        ;;
+      n|no)
+        printf 'false'
+        return
+        ;;
+    esac
+    printf '\nPlease answer y or n.\n\n' > /dev/tty
+  done
+}
+
 append_set_arg() {
   local key="$1"
   local value="$2"
@@ -111,6 +139,7 @@ detect_tz() {
 run_interactive_install() {
   local tz domain reality_domain tgproxy_public_host fake_site instance_name tgproxy_state
   local netbird_setup_key netbird_management_url netbird_state
+  local enable_netbird
   local -a install_args
 
   frame 'TransitHub v2 Install Menu' 'Fresh host deployment for proxy platform'
@@ -126,9 +155,14 @@ run_interactive_install() {
     tgproxy_public_host=""
   fi
   printf '\n' > /dev/tty
-  printf '%b%s%b [disabled, Enter = skip]: ' "$BOLD" 'NetBird setup key' "$RESET" > /dev/tty
-  IFS= read -r netbird_setup_key < /dev/tty
-  if [[ "$netbird_setup_key" == "-" ]]; then
+  enable_netbird="$(prompt_yes_no 'Enable NetBird' 'n')"
+  netbird_setup_key=""
+  if [[ "$enable_netbird" == "true" ]]; then
+    printf '\n' > /dev/tty
+    printf '%b%s%b [required]: ' "$BOLD" 'NetBird setup key' "$RESET" > /dev/tty
+    IFS= read -r netbird_setup_key < /dev/tty
+  fi
+  if [[ "$netbird_setup_key" == "-" || "$enable_netbird" != "true" ]]; then
     netbird_setup_key=""
   fi
   netbird_management_url=""
@@ -242,6 +276,7 @@ run_noninteractive_install() {
     printf '  netbird   : %s\n' "$netbird_management_url"
   else
     printf '  netbird   : disabled\n'
+    printf '              set TRANSITHUB_NETBIRD_SETUP_KEY and TRANSITHUB_NETBIRD_MANAGEMENT_URL to enable it\n'
   fi
   printf '  timezone  : %s\n' "$tz"
   printf '  fake site : %s\n' "$fake_site"
