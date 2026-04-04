@@ -14,22 +14,31 @@ TransitHub v2 разворачивает proxy platform на чистой VPS с
 
 Одной строкой:
 
+Dev install:
+
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:-main}"
-bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
+bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/dev/bootstrap.sh")
 ```
 
 или:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:-main}"
-bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
+bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/dev/bootstrap.sh")
 ```
 
-Non-interactive example with NetBird enabled:
+Stable install from main:
 
 ```bash
-TRANSITHUB_BRANCH=dev \
+bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh")
+```
+
+```bash
+bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/main/bootstrap.sh")
+```
+
+Non-interactive dev example with NetBird enabled:
+
+```bash
 TRANSITHUB_DOMAIN=example.com \
 TRANSITHUB_NETBIRD_SETUP_KEY=nb-setup-key \
 TRANSITHUB_NETBIRD_MANAGEMENT_URL=https://management.example.com \
@@ -43,8 +52,7 @@ apt-get update
 apt-get install -y git
 TARGET_USER="${SUDO_USER:-$(id -un)}"
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-BRANCH="${TRANSITHUB_BRANCH:-main}"
-git clone --branch "$BRANCH" https://github.com/denash-git/TransitHub.git "${TARGET_HOME}/TransitHub"
+git clone --branch dev https://github.com/denash-git/TransitHub.git "${TARGET_HOME}/TransitHub"
 cd "${TARGET_HOME}/TransitHub"
 bash install.sh
 ```
@@ -84,15 +92,13 @@ bash install.sh
 - для тестового сертификата можно запустить:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:-main}"
-CERTBOT_STAGING=true bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
+CERTBOT_STAGING=true bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/dev/bootstrap.sh")
 ```
 
 или:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:-main}"
-CERTBOT_STAGING=true bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
+CERTBOT_STAGING=true bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/dev/bootstrap.sh")
 ```
 
 - если время на VPS не синхронизировано, установщик покажет предупреждение, но продолжит работу
