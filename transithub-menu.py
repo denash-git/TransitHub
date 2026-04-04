@@ -21,6 +21,15 @@ from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from transithub_runtime.env import parse_env as shared_parse_env, update_env as shared_update_env
+from transithub_runtime.backup import (
+    BACKUP_DIR as RUNTIME_BACKUP_DIR,
+    RESTORE_INBOX_DIR as RUNTIME_RESTORE_INBOX_DIR,
+    BackupError,
+    backup_bundle as runtime_backup_bundle,
+    latest_restore_bundle as runtime_latest_restore_bundle,
+    restore_bundle as runtime_restore_bundle,
+    verify_bundle as runtime_verify_bundle,
+)
 from transithub_runtime.tgproxy import (
     build_secret as shared_build_tgproxy_secret,
     enabled as shared_tgproxy_enabled,
@@ -1171,6 +1180,8 @@ def services_menu() -> None:
             "2. Show service logs",
             "3. TLS certificate",
             "4. Time settings",
+            "5. Backup Bundle",
+            "6. Restore Bundle",
             danger_menu_option("Back"),
         ]
         print_block("Services", lines, accent=BLUE)
@@ -1185,8 +1196,100 @@ def services_menu() -> None:
             certificate_menu(values)
         elif choice == "4":
             time_menu(values)
+        elif choice == "5":
+            create_backup_bundle_action()
+        elif choice == "6":
+            restore_backup_bundle_action()
         elif choice == "0":
             return
+
+
+def create_backup_bundle_action() -> None:
+    print_block(
+        "Backup Bundle",
+        [
+            f"Project root      : {PROJECT_ROOT}",
+            f"Backup directory  : {RUNTIME_BACKUP_DIR}",
+            "",
+            "Creating same-instance backup bundle...",
+        ],
+        accent=BLUE,
+    )
+    try:
+        summary = runtime_backup_bundle()
+        verify_summary = runtime_verify_bundle(summary.bundle_path)
+    except Exception as exc:
+        print_block("Backup Bundle Failed", [str(exc)], accent=RED)
+        pause()
+        return
+
+    lines = [
+        "Backup bundle created successfully.",
+        "",
+        f"Bundle file       : {summary.bundle_path}",
+        f"Bundle schema     : {verify_summary.manifest.get('schema_version', '-')}",
+        f"Domain            : {verify_summary.manifest.get('domain', '-') or '-'}",
+        f"TGProxy host      : {verify_summary.manifest.get('tgproxy_public_host', '-') or '-'}",
+        f"Files in payload  : {len(verify_summary.project_files)}",
+        "",
+        f"To restore later, place a bundle into {RUNTIME_RESTORE_INBOX_DIR}",
+        "Restore uses the newest *.thbundle.tar.gz file from that directory.",
+    ]
+    print_block("Backup Bundle", lines, accent=GREEN)
+    pause()
+
+
+def restore_backup_bundle_action() -> None:
+    try:
+        bundle_path = runtime_latest_restore_bundle()
+    except BackupError as exc:
+        print_block(
+            "Restore Bundle",
+            [
+                str(exc),
+                "",
+                f"Place exactly the bundle file into: {RUNTIME_RESTORE_INBOX_DIR}",
+                "Restore will use the newest *.thbundle.tar.gz file from that directory.",
+            ],
+            accent=RED,
+        )
+        pause()
+        return
+
+    print_block(
+        "Restore Bundle",
+        [
+            f"Bundle file       : {bundle_path}",
+            f"Restore inbox     : {RUNTIME_RESTORE_INBOX_DIR}",
+            "",
+            "Verifying bundle, creating rollback snapshot,",
+            "restoring runtime state, and restarting services...",
+        ],
+        accent=BLUE,
+    )
+    try:
+        verify_summary = runtime_verify_bundle(bundle_path)
+        result = runtime_restore_bundle(bundle_path)
+    except Exception as exc:
+        print_block("Restore Bundle Failed", [str(exc)], accent=RED)
+        pause()
+        return
+
+    lines = [
+        "Restore bundle completed successfully.",
+        "",
+        f"Bundle used       : {result.get('bundle_path', '-')}",
+        f"Rollback bundle   : {result.get('rollback_path', '-')}",
+        f"Domain            : {result.get('domain', '-') or '-'}",
+        f"TGProxy host      : {result.get('tgproxy_public_host', '-') or '-'}",
+        f"Files restored    : {result.get('project_files_restored', '-')}",
+        f"Bundle schema     : {verify_summary.manifest.get('schema_version', '-')}",
+        "",
+        "Compose status:",
+        *result.get("service_lines", []),
+    ]
+    print_block("Restore Bundle", lines, accent=GREEN)
+    pause()
 
 
 def show_compose_status(values: dict[str, str]) -> None:
