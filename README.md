@@ -15,14 +15,14 @@ TransitHub v2 разворачивает proxy platform на чистой VPS с
 Одной строкой:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+BRANCH="${TRANSITHUB_BRANCH:-main}"
 bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
 или:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+BRANCH="${TRANSITHUB_BRANCH:-main}"
 bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
@@ -33,7 +33,7 @@ apt-get update
 apt-get install -y git
 TARGET_USER="${SUDO_USER:-$(id -un)}"
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+BRANCH="${TRANSITHUB_BRANCH:-main}"
 git clone --branch "$BRANCH" https://github.com/denash-git/TransitHub.git "${TARGET_HOME}/TransitHub"
 cd "${TARGET_HOME}/TransitHub"
 bash install.sh
@@ -74,14 +74,14 @@ bash install.sh
 - для тестового сертификата можно запустить:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+BRANCH="${TRANSITHUB_BRANCH:-main}"
 CERTBOT_STAGING=true bash <(wget -qO- "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
 или:
 
 ```bash
-BRANCH="${TRANSITHUB_BRANCH:?set TRANSITHUB_BRANCH to the target branch (use main for stable installs)}"
+BRANCH="${TRANSITHUB_BRANCH:-main}"
 CERTBOT_STAGING=true bash <(curl -fsSL "https://raw.githubusercontent.com/denash-git/TransitHub/${BRANCH}/bootstrap.sh")
 ```
 
