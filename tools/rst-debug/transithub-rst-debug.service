@@ -1,0 +1,14 @@
+[Unit]
+Description=TransitHub RST debug monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/transithub-rst-debug
+ExecStart=/usr/local/bin/transithub-rst-debug-watch
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
