@@ -1,0 +1,11 @@
+[Unit]
+Description=TransitHub RST guard restore from local cache
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/transithub-rst-guard restore
+
+[Install]
+WantedBy=multi-user.target
