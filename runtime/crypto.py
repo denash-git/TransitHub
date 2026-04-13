@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 
-import bcrypt
 
 
 @dataclass(frozen=True)
@@ -38,4 +37,6 @@ def to_xray_key(raw: bytes) -> str:
 
 
 def hash_password(password: str) -> str:
+    import bcrypt
+
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
